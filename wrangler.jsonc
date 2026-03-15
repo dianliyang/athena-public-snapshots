@@ -1,5 +1,17 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "athena-public-snapshots",
-  "compatibility_date": "2026-03-15"
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "athena-public-snapshots",
+	"compatibility_date": "2026-03-15",
+	"vectorize": [
+		{
+			"binding": "VECTORIZE",
+			"index_name": "athena-courses-index",
+			"remote": true
+		},
+		{
+			"binding": "VECTORIZE",
+			"index_name": "athena-workouts-index",
+			"remote": true
+		}
+	]
 }

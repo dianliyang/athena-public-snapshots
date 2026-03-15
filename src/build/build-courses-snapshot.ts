@@ -23,7 +23,7 @@ type InputCourse = {
   instructors?: string[];
 };
 
-const PUBLIC_UNIVERSITIES = new Set(["MIT", "Stanford", "UCB", "CMU"]);
+const PUBLIC_UNIVERSITIES = new Set(["MIT", "Stanford", "UCB", "CMU", "mit", "stanford", "ucb", "cmu"]);
 
 function slugify(value: string): string {
   return value

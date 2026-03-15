@@ -1,1 +1,8 @@
 node_modules/
+dist/
+out/
+.env
+.env.*
+.wrangler/
+.DS_Store
+docs/plans
