@@ -1,0 +1,8 @@
+{
+  "name": "athena-public-snapshots",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node /Users/wagagaha/vibe/athena-web/node_modules/vitest/vitest.mjs run"
+  }
+}
