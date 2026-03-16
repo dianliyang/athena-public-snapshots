@@ -4,11 +4,6 @@ export type WorkoutBrowseRecord = {
   title: string;
   provider: string;
   category: string | null;
-  weekday: string | null;
-  timeLabel: string | null;
-  location: string | null;
-  bookingUrl: string | null;
-  excerpt: string | null;
   searchText: string;
 };
 
@@ -19,10 +14,31 @@ export type WorkoutDetailRecord = {
   provider: string;
   category: string | null;
   description: string | null;
-  schedule: string[];
+  schedule: Array<{
+    day: string;
+    time: string;
+    location: string;
+  }>;
   location: string | null;
   bookingUrl: string | null;
   url: string | null;
+  
+  // Flattened details
+  instructor?: string;
+  startDate?: string;
+  endDate?: string;
+  priceStudent?: number | null;
+  priceStaff?: number | null;
+  priceExternal?: number | null;
+  priceExternalReduced?: number | null;
+  bookingStatus?: string;
+  semester?: string;
+  isEntgeltfrei?: boolean;
+  bookingLabel?: string;
+  bookingOpensOn?: string;
+  bookingOpensAt?: string;
+  plannedDates?: string[];
+  durationUrl?: string;
 };
 
 export type WorkoutsBrowseSnapshot = WorkoutBrowseRecord[];
@@ -36,10 +52,6 @@ function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === "string";
 }
 
-function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((item) => typeof item === "string");
-}
-
 function isWorkoutBrowseRecord(value: unknown): value is WorkoutBrowseRecord {
   if (!isObject(value)) return false;
 
@@ -49,11 +61,6 @@ function isWorkoutBrowseRecord(value: unknown): value is WorkoutBrowseRecord {
     typeof value.title === "string" &&
     typeof value.provider === "string" &&
     isNullableString(value.category) &&
-    isNullableString(value.weekday) &&
-    isNullableString(value.timeLabel) &&
-    isNullableString(value.location) &&
-    isNullableString(value.bookingUrl) &&
-    isNullableString(value.excerpt) &&
     typeof value.searchText === "string"
   );
 }
@@ -68,7 +75,7 @@ function isWorkoutDetailRecord(value: unknown): value is WorkoutDetailRecord {
     typeof value.provider === "string" &&
     isNullableString(value.category) &&
     isNullableString(value.description) &&
-    isStringArray(value.schedule) &&
+    Array.isArray(value.schedule) &&
     isNullableString(value.location) &&
     isNullableString(value.bookingUrl) &&
     isNullableString(value.url)

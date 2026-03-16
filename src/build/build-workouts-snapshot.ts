@@ -17,6 +17,28 @@ type InputWorkout = {
   bookingUrl?: string | null;
   url?: string | null;
   description?: string | null;
+  
+  // Flattened details from scraper
+  instructor?: string;
+  startDate?: string;
+  endDate?: string;
+  priceStudent?: number | null;
+  priceStaff?: number | null;
+  priceExternal?: number | null;
+  priceExternalReduced?: number | null;
+  bookingStatus?: string;
+  semester?: string;
+  schedule?: Array<{
+    day: string;
+    time: string;
+    location: string;
+  }>;
+  isEntgeltfrei?: boolean;
+  bookingLabel?: string;
+  bookingOpensOn?: string;
+  bookingOpensAt?: string;
+  plannedDates?: string[];
+  durationUrl?: string | null;
 };
 
 function slugify(value: string): string {
@@ -48,27 +70,29 @@ export function buildWorkoutsSnapshot(
   for (const item of items) {
     const id = String(item.id);
     const slug = slugify(item.title);
+
     const browseRow: WorkoutBrowseRecord = {
       id,
       slug,
       title: item.title,
       provider: item.provider,
       category: item.category ?? null,
-      weekday: item.weekday ?? null,
-      timeLabel: item.timeLabel ?? null,
-      location: item.location ?? null,
-      bookingUrl: item.bookingUrl ?? null,
-      excerpt: item.description ?? null,
-      searchText: buildSearchText([item.title, item.provider, item.category, item.weekday, item.location]),
+      searchText: buildSearchText([
+        item.title,
+        item.provider,
+        item.category,
+        item.weekday,
+        item.location,
+      ]),
     };
 
-    const schedule = item.weekday && item.timeLabel
-      ? [`${item.weekday} ${item.timeLabel}`]
+    const schedule = item.schedule || (item.weekday && item.timeLabel
+      ? [{ day: item.weekday, time: item.timeLabel, location: item.location || "" }]
       : item.weekday
-        ? [item.weekday]
+        ? [{ day: item.weekday, time: "", location: item.location || "" }]
         : item.timeLabel
-          ? [item.timeLabel]
-          : [];
+          ? [{ day: "", time: item.timeLabel, location: item.location || "" }]
+          : []);
 
     const detailRow: WorkoutDetailRecord = {
       id,
@@ -81,6 +105,22 @@ export function buildWorkoutsSnapshot(
       location: item.location ?? null,
       bookingUrl: item.bookingUrl ?? null,
       url: item.url ?? null,
+      
+      instructor: item.instructor,
+      startDate: item.startDate,
+      endDate: item.endDate,
+      priceStudent: item.priceStudent,
+      priceStaff: item.priceStaff,
+      priceExternal: item.priceExternal,
+      priceExternalReduced: item.priceExternalReduced,
+      bookingStatus: item.bookingStatus,
+      semester: item.semester,
+      isEntgeltfrei: item.isEntgeltfrei,
+      bookingLabel: item.bookingLabel,
+      bookingOpensOn: item.bookingOpensOn,
+      bookingOpensAt: item.bookingOpensAt,
+      plannedDates: item.plannedDates,
+      durationUrl: item.durationUrl || undefined,
     };
 
     browse.push(browseRow);

@@ -1,12 +1,9 @@
 import { Course } from './types';
 import pLimit from 'p-limit';
-import { SupabaseDatabase } from '../supabase/server';
-import { parseSemesterCode, compareSemesters } from './utils/semester';
 
 export abstract class BaseScraper {
   name: string;
   semester?: string;
-  db?: SupabaseDatabase;
 
   constructor(name: string) {
     this.name = name;
@@ -57,37 +54,13 @@ export abstract class BaseScraper {
     const dedupedLinks = Array.from(new Set(links));
     console.log(`[${this.name}] Processing ${dedupedLinks.length} links${dedupedLinks.length !== links.length ? ` (deduped from ${links.length})` : ""}...`);
 
-    const upToDateCodes = new Set<string>();
-    if (this.db && this.semester) {
-      const requestedSemester = parseSemesterCode(this.semester);
-      // Map "mit" -> "MIT", "stanford" -> "Stanford" etc for DB query
-      const dbUniName = this.name === 'mit' ? 'MIT' : 
-                        this.name === 'cau' ? 'CAU Kiel' : this.name === 'stanford' ? 'Stanford' : 
-                        this.name === 'cmu' ? 'CMU' : 
-                        this.name === 'ucb' ? 'UC Berkeley' : 
-                        this.name;
-      
-      const existingMap = await this.db.getExistingCourseCodes(dbUniName);
-      
-      // Filter codes where latest_semester >= requestedSemester
-      for (const [code, latest] of existingMap.entries()) {
-        if (latest && compareSemesters(latest, requestedSemester) >= 0 && latest.hasDescription) {
-          upToDateCodes.add(code);
-        }
-      }
-
-      if (upToDateCodes.size > 0) {
-        console.log(`[${this.name}] Found ${upToDateCodes.size} up-to-date courses in DB. These will skip detail fetching.`);
-      }
-    }
-
     const limit = pLimit(5);
     const results = await Promise.all(
       dedupedLinks.map(link =>
         limit(async () => {
           const html = await this.fetchPage(link);
           if (html) {
-            return this.parser(html, upToDateCodes);
+            return this.parser(html);
           }
           return [];
         })
