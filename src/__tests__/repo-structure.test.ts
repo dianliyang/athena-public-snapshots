@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -13,5 +13,15 @@ describe("athena-public-snapshots repository structure", () => {
     expect(existsSync(path.join(repoRoot, "README.md"))).toBe(true);
     expect(existsSync(path.join(repoRoot, "wrangler.jsonc"))).toBe(true);
     expect(existsSync(path.join(repoRoot, "src"))).toBe(true);
+  });
+
+  test("uses unique wrangler binding names", () => {
+    const wranglerConfig = readFileSync(path.join(repoRoot, "wrangler.jsonc"), "utf8");
+    const bindingNames = Array.from(
+      wranglerConfig.matchAll(/"binding"\s*:\s*"([^"]+)"/g),
+      (match) => match[1],
+    );
+
+    expect(new Set(bindingNames).size).toBe(bindingNames.length);
   });
 });

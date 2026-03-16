@@ -4,12 +4,12 @@
 	"compatibility_date": "2026-03-15",
 	"vectorize": [
 		{
-			"binding": "VECTORIZE",
+			"binding": "COURSES_VECTORIZE",
 			"index_name": "athena-courses-index",
 			"remote": true
 		},
 		{
-			"binding": "VECTORIZE",
+			"binding": "WORKOUTS_VECTORIZE",
 			"index_name": "athena-workouts-index",
 			"remote": true
 		}
