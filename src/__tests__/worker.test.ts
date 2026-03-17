@@ -25,6 +25,15 @@ class FakeBucket implements R2BucketLike {
 }
 
 describe("worker scheduled publish", () => {
+  test("requires GOOGLE_TRANSLATE_API_KEY for the default scheduled snapshot build", async () => {
+    const bucket = new FakeBucket();
+    const worker = createWorker();
+
+    await expect(
+      worker.scheduled({} as never, { SNAPSHOTS_BUCKET: bucket } as never, {} as never),
+    ).rejects.toThrow("Missing GOOGLE_TRANSLATE_API_KEY for scheduled workout locale translation");
+  });
+
   test("publishes course and workout JSON snapshots to R2", async () => {
     const bucket = new FakeBucket();
     const worker = createWorker({

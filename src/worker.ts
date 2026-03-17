@@ -35,6 +35,10 @@ export function createWorker(deps: WorkerDeps = {}) {
       });
     },
     async scheduled(_controller: unknown, env: WorkerEnv, _ctx: unknown): Promise<void> {
+      if (!deps.buildPublicSnapshots && !env.GOOGLE_TRANSLATE_API_KEY) {
+        throw new Error("Missing GOOGLE_TRANSLATE_API_KEY for scheduled workout locale translation");
+      }
+
       const snapshots = deps.buildPublicSnapshots
         ? await deps.buildPublicSnapshots()
         : await buildPublicSnapshots({}, {

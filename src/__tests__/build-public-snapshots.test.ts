@@ -142,6 +142,93 @@ describe("buildPublicSnapshots", () => {
     });
   });
 
+  test("uses the Google Translate API request shape when translationApiKey is provided", async () => {
+    const writes = new Map<string, string>();
+    const requests: Array<{
+      url: string;
+      method?: string;
+      headers?: HeadersInit;
+      bodyText: string;
+    }> = [];
+    const version = "2026-03-17T10-00-00Z";
+    const titleKey = `workouts/locales/title/${version}.json`;
+    const categoryKey = `workouts/locales/category/${version}.json`;
+
+    const bucket = {
+      async get() {
+        return null;
+      },
+      async put(key: string, value: string) {
+        writes.set(key, value);
+      },
+    };
+
+    await buildPublicSnapshots(
+      { version },
+      {
+        retrieveCourses: async () => [],
+        retrieveWorkouts: async () => [
+          {
+            id: "ricks-club-bowling",
+            title: "Bowling",
+            provider: "Ricks Club",
+            category: "Bowling Games",
+          },
+        ],
+        localeBucket: bucket,
+        translationApiKey: "test-api-key",
+        fetchImpl: async (input, init) => {
+          requests.push({
+            url: String(input),
+            method: init?.method,
+            headers: init?.headers,
+            bodyText: init?.body instanceof URLSearchParams ? init.body.toString() : String(init?.body || ""),
+          });
+
+          const body = init?.body instanceof URLSearchParams ? init.body : new URLSearchParams(String(init?.body || ""));
+          const target = body.get("target") || "";
+          const text = body.get("q") || "";
+
+          return new Response(JSON.stringify({
+            data: {
+              translations: [{ translatedText: `${text}-${target}` }],
+            },
+          }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        },
+      },
+    );
+
+    expect(requests).toHaveLength(8);
+    expect(requests[0]?.url).toBe("https://translation.googleapis.com/language/translate/v2?key=test-api-key");
+    expect(requests[0]?.method).toBe("POST");
+    expect(requests[0]?.bodyText).toContain("q=Bowling");
+    expect(requests[0]?.bodyText).toContain("source=de");
+    expect(requests[0]?.bodyText).toContain("format=text");
+    expect(requests.map((request) => request.bodyText)).toContain("q=Bowling&source=de&target=en&format=text");
+    expect(requests.map((request) => request.bodyText)).toContain("q=Bowling+Games&source=de&target=zh-CN&format=text");
+
+    const titleJson = JSON.parse(writes.get(titleKey) || "{}");
+    const categoryJson = JSON.parse(writes.get(categoryKey) || "{}");
+
+    expect(titleJson.Bowling).toEqual({
+      en: "Bowling-en",
+      de: "Bowling",
+      ja: "Bowling-ja",
+      ko: "Bowling-ko",
+      "zh-CN": "Bowling-zh-CN",
+    });
+    expect(categoryJson["Bowling Games"]).toEqual({
+      en: "Bowling Games-en",
+      de: "Bowling Games",
+      ja: "Bowling Games-ja",
+      ko: "Bowling Games-ko",
+      "zh-CN": "Bowling Games-zh-CN",
+    });
+  });
+
   test("adds versioned locale keys to the workouts manifest", async () => {
     const version = "2026-03-17T10-00-00Z";
 
