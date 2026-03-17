@@ -1,11 +1,5 @@
-import { MIT } from './lib/scrapers/mit';
-import { Stanford } from './lib/scrapers/stanford';
-import { CMU } from './lib/scrapers/cmu';
-import { UCB } from './lib/scrapers/ucb';
-import { retrieveWorkoutSourceBatches } from './lib/scrapers/workout-sources';
-import { buildCoursesSnapshot } from './build/build-courses-snapshot';
-import { buildWorkoutsSnapshot } from './build/build-workouts-snapshot';
 import { i18n } from './lib/i18n';
+import { buildPublicSnapshots } from './pipeline/build-public-snapshots';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -19,43 +13,16 @@ async function main() {
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir);
   if (!fs.existsSync(localesDir)) fs.mkdirSync(localesDir);
 
+  const snapshots = await buildPublicSnapshots({ version, target: targetUni, workoutSemester: 'wi25' });
+
   // 1. Courses
-  const allCourseScrapers = [new MIT(), new Stanford(), new CMU(), new UCB()];
-  const courseScrapers = targetUni 
-    ? allCourseScrapers.filter(s => s.name.toLowerCase() === targetUni)
-    : allCourseScrapers;
-
-  let allCourses: any[] = [];
-  if (courseScrapers.length > 0) {
-    for (const scraper of courseScrapers) {
-      try {
-        const items = await scraper.retrieve();
-        allCourses = allCourses.concat(items.map((item: any) => ({
-          id: `${item.university}-${item.courseCode}`,
-          title: item.title,
-          courseCode: item.courseCode,
-          university: item.university,
-          description: item.description,
-          credit: item.credit,
-          level: item.level,
-          department: item.department,
-          url: item.url,
-          resources: item.resources,
-          instructors: item.instructors,
-        })));
-      } catch (e) {
-        console.error(`Failed to scrape ${scraper.name}:`, e);
-      }
-    }
-  }
-
-  if (allCourses.length) {
-    const { manifest, browse, detail } = buildCoursesSnapshot(allCourses, version);
+  if (snapshots.courses) {
+    const { manifest, browse, detail } = snapshots.courses;
     fs.writeFileSync(path.join(outDir, 'courses-manifest.json'), JSON.stringify(manifest, null, 2));
     fs.writeFileSync(path.join(outDir, 'courses-browse.json'), JSON.stringify(browse, null, 2));
     fs.writeFileSync(path.join(outDir, 'courses-detail.json'), JSON.stringify(detail, null, 2));
     
-    const courseVectors = allCourses.map(c => ({
+    const courseVectors = Object.values(detail).map(c => ({
       id: c.id,
       text: `${c.title} ${c.description || ''}`
     }));
@@ -63,36 +30,17 @@ async function main() {
   }
 
   // 2. Workouts
-  const allWorkoutSources: Array<'cau-sport' | 'urban-apes'> = ['cau-sport', 'urban-apes'];
-  const workoutSources = targetUni
-    ? allWorkoutSources.filter(s => s === targetUni)
-    : allWorkoutSources;
+  if (snapshots.workouts) {
+    const { manifest, browse, detail } = snapshots.workouts;
+    fs.writeFileSync(path.join(outDir, 'workouts-manifest.json'), JSON.stringify(manifest, null, 2));
+    fs.writeFileSync(path.join(outDir, 'workouts-browse.json'), JSON.stringify(browse, null, 2));
+    fs.writeFileSync(path.join(outDir, 'workouts-detail.json'), JSON.stringify(detail, null, 2));
 
-  if (workoutSources.length > 0) {
-    try {
-      const retrieval = await retrieveWorkoutSourceBatches({ semester: 'wi25', sources: workoutSources });
-      const workouts = retrieval.batches.flatMap(b => b.workouts);
-      const normalized = workouts.map((w: any) => ({
-        ...w,
-        id: `${w.source.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${w.courseCode}`,
-        title: w.title,
-        provider: w.source,
-      }));
-      if (normalized.length) {
-        const { manifest, browse, detail } = buildWorkoutsSnapshot(normalized, version);
-        fs.writeFileSync(path.join(outDir, 'workouts-manifest.json'), JSON.stringify(manifest, null, 2));
-        fs.writeFileSync(path.join(outDir, 'workouts-browse.json'), JSON.stringify(browse, null, 2));
-        fs.writeFileSync(path.join(outDir, 'workouts-detail.json'), JSON.stringify(detail, null, 2));
-
-        const workoutVectors = normalized.map(w => ({
-          id: w.id,
-          text: `${w.title} ${w.description || ''}`
-        }));
-        fs.writeFileSync(path.join(outDir, 'workouts-vectors.json'), JSON.stringify(workoutVectors, null, 2));
-      }
-    } catch (e) {
-      console.error('Failed to scrape workouts:', e);
-    }
+    const workoutVectors = Object.values(detail).map(w => ({
+      id: w.id,
+      text: `${w.title} ${w.description || ''}`
+    }));
+    fs.writeFileSync(path.join(outDir, 'workouts-vectors.json'), JSON.stringify(workoutVectors, null, 2));
   }
 
   // 3. Locales

@@ -126,9 +126,8 @@ const workoutsDetail = {
     provider: "UniSport",
     category: "Cycling",
     description: "High-intensity interval training on stationary bikes.",
-    schedule: ["Monday 18:00-19:00"],
-    location: "Studio A",
-    bookingUrl: "https://example.com/book/spin",
+    schedule: [{ day: "Monday", time: "18:00-19:00", location: "Studio A" }],
+    location: ["Studio A", "Studio B"],
     url: "https://example.com/workouts/spin",
   },
 };

@@ -1,7 +1,17 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "athena-public-snapshots",
+	"main": "src/worker.ts",
 	"compatibility_date": "2026-03-15",
+	"triggers": {
+		"crons": ["0 22 * * *"]
+	},
+	"r2_buckets": [
+		{
+			"binding": "SNAPSHOTS_BUCKET",
+			"bucket_name": "athena-public-snapshots"
+		}
+	],
 	"vectorize": [
 		{
 			"binding": "COURSES_VECTORIZE",

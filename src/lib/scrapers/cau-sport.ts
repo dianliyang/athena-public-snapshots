@@ -14,41 +14,8 @@ const DAY_MAP: Record<string, string> = {
   So: "Sun",
 };
 
-/**
- * Deduplicates segments of a location string like:
- * "Beach-Volleyballplatz 1, Olshausenstr. 70, 24118 Kiel; Beach-Volleyballplatz 2, Olshausenstr. 70, 24118 Kiel"
- * -> "Beach-Volleyballplatz 1, Beach-Volleyballplatz 2, Olshausenstr. 70, 24118 Kiel"
- */
-function deduplicateLocationString(input: string): string {
-  if (!input.includes(';')) return input;
-  
-  const entries = input.split(';').map(s => s.trim()).filter(Boolean);
-  if (entries.length <= 1) return input;
-
-  const allSubSegments = entries.map(entry => entry.split(',').map(s => s.trim()).filter(Boolean));
-  
-  // Find common trailing segments
-  const reversedSegments = allSubSegments.map(segs => [...segs].reverse());
-  const commonTrailing: string[] = [];
-  
-  const minLen = Math.min(...reversedSegments.map(r => r.length));
-  for (let i = 0; i < minLen; i++) {
-    const candidate = reversedSegments[0][i];
-    if (reversedSegments.every(r => r[i] === candidate)) {
-      commonTrailing.push(candidate);
-    } else {
-      break;
-    }
-  }
-
-  if (commonTrailing.length === 0) return input;
-
-  const uniqueLeading = allSubSegments.map(segs => {
-    return segs.slice(0, segs.length - commonTrailing.length).join(', ');
-  }).filter(Boolean);
-
-  const finalTrailing = [...commonTrailing].reverse().join(', ');
-  return `${uniqueLeading.join(', ')}, ${finalTrailing}`;
+function translateDay(day: string): string {
+  return day.replace(/Mo|Di|Mi|Do|Fr|Sa|So/g, (m) => DAY_MAP[m] || m);
 }
 
 const BOOKING_STATUS_MAP: Record<string, string> = {
@@ -79,13 +46,19 @@ function parseBookingStatus(bookingTd: cheerio.Cheerio<AnyNode>): {
     .attr("value")
     ?.replace(/\s+/g, " ")
     .trim() || "";
+  const titleValue = bookingTd
+    .find("input[type='submit'], input[type='button']")
+    .attr("title")
+    ?.toLowerCase() || "";
   const textValue = bookingTd.text().replace(/\s+/g, " ").trim();
   const rawLabel = btnValue || textValue;
   const normalized = rawLabel.toLowerCase();
 
+  const isRestricted = normalized.includes("🔒") || normalized.includes("&#128274;") || titleValue.includes("password protected") || titleValue.includes("passwort");
+
   if (normalized.includes("ausgebucht")) status = "fully_booked";
-  else if (normalized.includes("buchen")) status = "available";
-  else if (normalized.includes("warteliste")) status = "waitlist";
+  else if (normalized.includes("buchen")) status = isRestricted ? "restricted" : "available";
+  else if (normalized.includes("warteliste")) status = isRestricted ? "restricted_waitlist" : "waitlist";
   else if (normalized.includes("gesperrt") || normalized.includes("blocked")) status = "blocked";
   else if (normalized.includes("storniert") || normalized.includes("cancel")) status = "cancelled";
   else if (normalized.includes("abgelaufen")) status = "expired";
@@ -180,7 +153,7 @@ export interface WorkoutCourse {
   dayOfWeek: string;
   startTime: string;
   endTime: string;
-  location: string;
+  location: string[];
   instructor: string;
   startDate: string;
   endDate: string;
@@ -729,7 +702,7 @@ export class CAUSport extends BaseScraper {
       const cloned = outerSpan.clone();
       cloned.find(".dispmobile").remove();
       const specificName = cloned.text().trim();
-      const fullTitle = specificName ? `${categoryPrefix} ${specificName}`.trim() : categoryPrefix;
+      const fullTitle = specificName || categoryPrefix;
 
       let category = categoryPrefix;
 
@@ -737,22 +710,59 @@ export class CAUSport extends BaseScraper {
       if (fullTitle.toLowerCase().includes("semestergebühr") || fullTitle.toLowerCase().includes("semester fee")) {
         category = "Semestergebühr";
       }
-      const parseCellLines = (cell: ReturnType<typeof row.find>) => {
-        const html = cell.html();
-        if (html && html.trim()) {
-          return html
-            .split(/<br\s*\/?>/i)
-            .map((part) => cheerio.load(part).text().replace(/\s+/g, " ").trim())
-            .filter(Boolean);
+      const scheduleEntries: Array<{ day: string; time: string; location: string }> = [];
+      const tzoTable = row.find("table.bs_tzotable");
+
+      if (tzoTable.length > 0) {
+        tzoTable.find("tr").each((_, tzotr) => {
+          const tzoRow = $(tzotr);
+          const day = tzoRow.find(".bs_stag").text().trim().replace(/\.$/, "");
+          const time = tzoRow.find(".bs_szeit").text().trim();
+          const location = tzoRow.find(".bs_sort").text().replace(/\s+/g, " ").trim();
+          if (day || time || location) {
+            scheduleEntries.push({
+              day: translateDay(day),
+              time,
+              location,
+            });
+          }
+        });
+      } else {
+        const parseCellLines = (cell: ReturnType<typeof row.find>) => {
+          const html = cell.html();
+          if (html && html.trim()) {
+            return html
+              .split(/<br\s*\/?>/i)
+              .map((part) => cheerio.load(part).text().replace(/\s+/g, " ").trim())
+              .filter(Boolean);
+          }
+
+          const text = cell.text().replace(/\s+/g, " ").trim();
+          return text ? [text] : [];
+        };
+
+        const days = parseCellLines(row.find("td.bs_stag")).map((day) => day.replace(/\.$/, ""));
+        const times = parseCellLines(row.find("td.bs_szeit"));
+        const locations = parseCellLines(row.find("td.bs_sort"));
+
+        days.forEach((day, i) => {
+          scheduleEntries.push({
+            day: translateDay(day),
+            time: times[i] || times[0] || "",
+            location: locations[i] || locations[0] || "",
+          });
+        });
+      }
+
+      // Apply fallbacks for missing times/locations in multi-row schedules
+      if (scheduleEntries.length > 1) {
+        const firstTime = scheduleEntries[0].time;
+        const firstLocation = scheduleEntries[0].location;
+        for (let i = 1; i < scheduleEntries.length; i++) {
+          if (!scheduleEntries[i].time) scheduleEntries[i].time = firstTime;
+          if (!scheduleEntries[i].location) scheduleEntries[i].location = firstLocation;
         }
-
-        const text = cell.text().replace(/\s+/g, " ").trim();
-        return text ? [text] : [];
-      };
-
-      const days = parseCellLines(row.find("td.bs_stag")).map((day) => day.replace(/\.$/, ""));
-      const times = parseCellLines(row.find("td.bs_szeit"));
-      const locations = parseCellLines(row.find("td.bs_sort"));
+      }
 
       const dateCell = row.find("td.bs_szr");
       const dateCellText = dateCell.text().replace(/\s+/g, " ").trim();
@@ -799,11 +809,6 @@ export class CAUSport extends BaseScraper {
       const { status: bookingStatus, label: bookingLabel } = parseBookingStatus(bookingTd);
 
       const bookingUrl = bookingTd.find("a[href]").attr("href") || "";
-      const scheduleEntries = days.map((day, i) => ({
-        day: DAY_MAP[day] || day,
-        time: times[i] || times[0] || "",
-        location: locations[i] || locations[0] || "",
-      }));
 
       rowPromises.push(detailLimit(async () => {
         const durationPageMetadata = durationUrl
@@ -817,12 +822,9 @@ export class CAUSport extends BaseScraper {
           ? parseBookingAvailability(bookingLabel, semester, finalStartDate || undefined)
           : {};
 
-        const uniqueLocations = [...new Set(scheduleEntries.map(s => s.location))].join("; ");
-        const resolvedLocation = deduplicateLocationString(
-          durationPageMetadata.locations.length > 0
-            ? durationPageMetadata.locations.join("; ")
-            : uniqueLocations
-        );
+        const resolvedLocation = durationPageMetadata.locations.length > 0
+          ? durationPageMetadata.locations
+          : [...new Set(scheduleEntries.map(s => s.location).filter(Boolean))];
 
         results.push({
           source: "CAU Kiel Sportzentrum",
@@ -832,7 +834,7 @@ export class CAUSport extends BaseScraper {
           dayOfWeek: scheduleEntries.map(s => s.day).join(", "),
           startTime: scheduleEntries[0]?.time.split("-")[0] || "",
           endTime:   scheduleEntries[0]?.time.split("-")[1] || "",
-          location:   resolvedLocation,
+          location: resolvedLocation,
           instructor,
           startDate: finalStartDate,
           endDate:   finalEndDate,

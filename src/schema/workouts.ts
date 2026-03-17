@@ -19,8 +19,7 @@ export type WorkoutDetailRecord = {
     time: string;
     location: string;
   }>;
-  location: string | null;
-  bookingUrl: string | null;
+  location: string[] | null;
   url: string | null;
   
   // Flattened details
@@ -52,6 +51,10 @@ function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === "string";
 }
 
+function isNullableStringArray(value: unknown): value is string[] | null {
+  return value === null || (Array.isArray(value) && value.every((entry) => typeof entry === "string"));
+}
+
 function isWorkoutBrowseRecord(value: unknown): value is WorkoutBrowseRecord {
   if (!isObject(value)) return false;
 
@@ -76,8 +79,7 @@ function isWorkoutDetailRecord(value: unknown): value is WorkoutDetailRecord {
     isNullableString(value.category) &&
     isNullableString(value.description) &&
     Array.isArray(value.schedule) &&
-    isNullableString(value.location) &&
-    isNullableString(value.bookingUrl) &&
+    isNullableStringArray(value.location) &&
     isNullableString(value.url)
   );
 }

@@ -9,7 +9,7 @@ const input = [
     category: "Cycling",
     weekday: "Monday",
     timeLabel: "18:00-19:00",
-    location: "Studio A",
+    location: ["Studio A", "Studio B"],
     bookingUrl: "https://example.com/book/spin",
     url: "https://example.com/workouts/spin",
     description: "High-intensity interval training on stationary bikes.",
@@ -22,13 +22,17 @@ describe("buildWorkoutsSnapshot", () => {
     const snapshot = buildWorkoutsSnapshot(input, "2026-03-15T12-00-00Z");
     expect(snapshot.browse[0]?.slug).toBe("spin-intervals");
     expect(snapshot.browse[0]?.searchText).toContain("spin intervals");
+    expect(snapshot.browse[0]?.searchText).toContain("studio a");
+    expect(snapshot.browse[0]?.searchText).toContain("studio b");
     expect(snapshot.detail["spin-01"]?.slug).toBe("spin-intervals");
+    expect(snapshot.detail["spin-01"]?.location).toEqual(["Studio A", "Studio B"]);
   });
 
   test("excludes non-public fields and emits manifest keys", () => {
     const snapshot = buildWorkoutsSnapshot(input, "2026-03-15T12-00-00Z");
     expect(snapshot.browse[0]).not.toHaveProperty("internalOnly");
     expect(snapshot.detail["spin-01"]).not.toHaveProperty("internalOnly");
+    expect(snapshot.detail["spin-01"]).not.toHaveProperty("bookingUrl");
     expect(snapshot.manifest).toEqual({
       version: "2026-03-15T12-00-00Z",
       generatedAt: "2026-03-15T12-00-00Z",

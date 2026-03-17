@@ -13,7 +13,7 @@ type InputWorkout = {
   category?: string | null;
   weekday?: string | null;
   timeLabel?: string | null;
-  location?: string | null;
+  location?: string[] | null;
   bookingUrl?: string | null;
   url?: string | null;
   description?: string | null;
@@ -56,6 +56,12 @@ function buildSearchText(parts: Array<string | number | null | undefined>): stri
     .join(" ");
 }
 
+function flattenSearchPart(part: string | string[] | number | null | undefined): Array<string | number> {
+  if (Array.isArray(part)) return part.filter(Boolean);
+  if (part === null || part === undefined) return [];
+  return [part];
+}
+
 export function buildWorkoutsSnapshot(
   items: InputWorkout[],
   version: string,
@@ -82,16 +88,16 @@ export function buildWorkoutsSnapshot(
         item.provider,
         item.category,
         item.weekday,
-        item.location,
+        ...flattenSearchPart(item.location),
       ]),
     };
 
     const schedule = item.schedule || (item.weekday && item.timeLabel
-      ? [{ day: item.weekday, time: item.timeLabel, location: item.location || "" }]
+      ? [{ day: item.weekday, time: item.timeLabel, location: item.location?.[0] || "" }]
       : item.weekday
-        ? [{ day: item.weekday, time: "", location: item.location || "" }]
+        ? [{ day: item.weekday, time: "", location: item.location?.[0] || "" }]
         : item.timeLabel
-          ? [{ day: "", time: item.timeLabel, location: item.location || "" }]
+          ? [{ day: "", time: item.timeLabel, location: item.location?.[0] || "" }]
           : []);
 
     const detailRow: WorkoutDetailRecord = {
@@ -103,7 +109,6 @@ export function buildWorkoutsSnapshot(
       description: item.description ?? null,
       schedule,
       location: item.location ?? null,
-      bookingUrl: item.bookingUrl ?? null,
       url: item.url ?? null,
       
       instructor: item.instructor,

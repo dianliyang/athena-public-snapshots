@@ -1,19 +1,11 @@
 import * as cheerio from "cheerio";
 import { BaseScraper } from "./BaseScraper";
 import { Course } from "./types";
-import { fetch, Agent } from "undici";
 import { parseCMUSemester, compareSemesters } from "./utils/semester";
 
 export class CMU extends BaseScraper {
-  private agent: Agent;
-
   constructor() {
     super("cmu");
-    this.agent = new Agent({
-      connect: {
-        rejectUnauthorized: false
-      }
-    });
   }
 
   getSemesterParam(): string {
@@ -41,7 +33,7 @@ export class CMU extends BaseScraper {
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         console.log(`[${this.name}] Fetching ${url} (attempt ${attempt})...`);
-        const response = await fetch(url, { dispatcher: this.agent });
+        const response = await fetch(url);
         if (!response.ok) {
           throw new Error(`HTTP ${response.status} ${response.statusText}`);
         }
@@ -128,7 +120,6 @@ export class CMU extends BaseScraper {
           "Content-Type": "application/x-www-form-urlencoded",
         } : {},
         body: body,
-        dispatcher: this.agent,
       });
 
       if (!response.ok) {
