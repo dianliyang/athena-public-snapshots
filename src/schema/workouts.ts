@@ -7,13 +7,26 @@ export type WorkoutBrowseRecord = {
   searchText: string;
 };
 
+export type WorkoutPrice = {
+  student?: number | null;
+  staff?: number | null;
+  external?: number | null;
+  externalReduced?: number | null;
+  adults?: number | null;
+  children?: number | null;
+  discount?: number | null;
+};
+
 export type WorkoutDetailRecord = {
   id: string;
   slug: string;
   title: string;
   provider: string;
   category: string | null;
-  description: string | null;
+  description: {
+    general?: string;
+    price?: string;
+  } | null;
   schedule: Array<{
     day: string;
     time: string;
@@ -26,10 +39,7 @@ export type WorkoutDetailRecord = {
   instructor?: string;
   startDate?: string;
   endDate?: string;
-  priceStudent?: number | null;
-  priceStaff?: number | null;
-  priceExternal?: number | null;
-  priceExternalReduced?: number | null;
+  price?: WorkoutPrice;
   bookingStatus?: string;
   semester?: string;
   isEntgeltfrei?: boolean;
@@ -51,8 +61,37 @@ function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === "string";
 }
 
+function isNullableNumber(value: unknown): value is number | null {
+  return value === null || typeof value === "number";
+}
+
 function isNullableStringArray(value: unknown): value is string[] | null {
   return value === null || (Array.isArray(value) && value.every((entry) => typeof entry === "string"));
+}
+
+function isWorkoutPrice(value: unknown): value is WorkoutPrice | undefined {
+  return (
+    value === undefined ||
+    (isObject(value) &&
+      (value.student === undefined || isNullableNumber(value.student)) &&
+      (value.staff === undefined || isNullableNumber(value.staff)) &&
+      (value.external === undefined || isNullableNumber(value.external)) &&
+      (value.externalReduced === undefined || isNullableNumber(value.externalReduced)) &&
+      (value.adults === undefined || isNullableNumber(value.adults)) &&
+      (value.children === undefined || isNullableNumber(value.children)) &&
+      (value.discount === undefined || isNullableNumber(value.discount)))
+  );
+}
+
+function isDescription(
+  value: unknown,
+): value is { general?: string; price?: string } | null {
+  return (
+    value === null ||
+    (isObject(value) &&
+      (value.general === undefined || typeof value.general === "string") &&
+      (value.price === undefined || typeof value.price === "string"))
+  );
 }
 
 function isWorkoutBrowseRecord(value: unknown): value is WorkoutBrowseRecord {
@@ -77,10 +116,11 @@ function isWorkoutDetailRecord(value: unknown): value is WorkoutDetailRecord {
     typeof value.title === "string" &&
     typeof value.provider === "string" &&
     isNullableString(value.category) &&
-    isNullableString(value.description) &&
+    isDescription(value.description) &&
     Array.isArray(value.schedule) &&
     isNullableStringArray(value.location) &&
-    isNullableString(value.url)
+    isNullableString(value.url) &&
+    isWorkoutPrice(value.price)
   );
 }
 

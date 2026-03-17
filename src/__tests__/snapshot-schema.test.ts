@@ -12,6 +12,8 @@ const manifest = {
   generatedAt: "2026-03-15T12:00:00.000Z",
   browseKey: "courses/browse/2026-03-15T12-00-00Z.json",
   detailKey: "courses/detail/2026-03-15T12-00-00Z.json",
+  titleLocaleKey: "workouts/locales/title/2026-03-15T12-00-00Z.json",
+  categoryLocaleKey: "workouts/locales/category/2026-03-15T12-00-00Z.json",
   itemCount: 4,
 };
 
@@ -125,10 +127,22 @@ const workoutsDetail = {
     title: "Spin Intervals",
     provider: "UniSport",
     category: "Cycling",
-    description: "High-intensity interval training on stationary bikes.",
+    description: {
+      general: "High-intensity interval training on stationary bikes.",
+      price: "Drop-in pricing available at front desk.",
+    },
     schedule: [{ day: "Monday", time: "18:00-19:00", location: "Studio A" }],
     location: ["Studio A", "Studio B"],
     url: "https://example.com/workouts/spin",
+    price: {
+      student: 12.9,
+      staff: null,
+      external: 16.9,
+      externalReduced: 9.9,
+      adults: 16.9,
+      children: 9.9,
+      discount: 12.9,
+    },
   },
 };
 

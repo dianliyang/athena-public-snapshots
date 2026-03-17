@@ -18,6 +18,7 @@ export {
 export type {
   WorkoutBrowseRecord,
   WorkoutDetailRecord,
+  WorkoutPrice,
   WorkoutsBrowseSnapshot,
   WorkoutsDetailSnapshot,
 } from "./workouts";

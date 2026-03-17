@@ -1,4 +1,5 @@
 import { CAUSport } from "./cau-sport";
+import { RicksClub } from "./ricks-club";
 import { UrbanApes } from "./urban-apes";
 import type { CauCacheState, WorkoutCourse } from "./cau-sport";
 
@@ -22,8 +23,8 @@ export async function retrieveWorkoutSourceBatches({
 }: {
   semester?: string;
   category?: string;
-  source?: "cau-sport" | "urban-apes";
-  sources?: Array<"cau-sport" | "urban-apes">;
+  source?: "cau-sport" | "urban-apes" | "ricks-club";
+  sources?: Array<"cau-sport" | "urban-apes" | "ricks-club">;
   cacheState?: {
     cau?: CauCacheState;
   };
@@ -62,6 +63,15 @@ export async function retrieveWorkoutSourceBatches({
       source: "Urban Apes",
       workouts: await urbanApes.retrieveWorkouts(category),
       pageUrl: "https://www.urbanapes.de/kiel/quick-overview/",
+    });
+  }
+
+  if (selectedSources.includes("ricks-club")) {
+    const ricksClub = new RicksClub();
+    batches.push({
+      source: "Ricks Club",
+      workouts: await ricksClub.retrieveWorkouts(category),
+      pageUrl: "https://www.ricksclub.de/",
     });
   }
 

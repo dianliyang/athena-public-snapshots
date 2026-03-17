@@ -3,6 +3,8 @@ export type ManifestSnapshot = {
   generatedAt: string;
   browseKey: string;
   detailKey: string;
+  titleLocaleKey?: string;
+  categoryLocaleKey?: string;
   itemCount: number;
 };
 
@@ -110,6 +112,8 @@ export function isManifestSnapshot(value: unknown): value is ManifestSnapshot {
     typeof value.generatedAt === "string" &&
     typeof value.browseKey === "string" &&
     typeof value.detailKey === "string" &&
+    (value.titleLocaleKey === undefined || typeof value.titleLocaleKey === "string") &&
+    (value.categoryLocaleKey === undefined || typeof value.categoryLocaleKey === "string") &&
     typeof value.itemCount === "number"
   );
 }

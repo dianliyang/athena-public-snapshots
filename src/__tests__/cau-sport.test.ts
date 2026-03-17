@@ -44,6 +44,20 @@ describe("CAUSport.parseWorkouts", () => {
     expect(workouts).toHaveLength(1);
     expect(workouts[0]?.title).toBe("Morning Flow");
     expect(workouts[0]?.location).toEqual(["Hall 1", "Hall 2"]);
+    expect(workouts[0]?.dayOfWeek).toBe("Mo.");
+    expect(workouts[0]?.schedule).toEqual([
+      {
+        day: "Mo.",
+        time: "08:00-09:00",
+        location: "Fallback Room",
+      },
+    ]);
+    expect(workouts[0]?.price).toEqual({
+      student: 10,
+      staff: 20,
+      external: 30,
+      externalReduced: 40,
+    });
   });
 
   test("falls back to the category label only when the course name is empty", async () => {

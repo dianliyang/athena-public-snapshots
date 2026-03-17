@@ -9,7 +9,7 @@
 	"r2_buckets": [
 		{
 			"binding": "SNAPSHOTS_BUCKET",
-			"bucket_name": "athena-public-snapshots"
+			"bucket_name": "athena-public-catalogs"
 		}
 	],
 	"vectorize": [

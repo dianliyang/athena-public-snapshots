@@ -7,12 +7,24 @@ const input = [
     title: "Spin Intervals",
     provider: "UniSport",
     category: "Cycling",
+    description: {
+      general: "High-intensity interval training on stationary bikes.",
+      price: "Single-session booking available.",
+    },
     weekday: "Monday",
     timeLabel: "18:00-19:00",
     location: ["Studio A", "Studio B"],
     bookingUrl: "https://example.com/book/spin",
     url: "https://example.com/workouts/spin",
-    description: "High-intensity interval training on stationary bikes.",
+    price: {
+      student: 12.9,
+      staff: null,
+      external: 16.9,
+      externalReduced: 9.9,
+      adults: 16.9,
+      children: 9.9,
+      discount: 12.9,
+    },
     internalOnly: true,
   },
 ];
@@ -26,6 +38,19 @@ describe("buildWorkoutsSnapshot", () => {
     expect(snapshot.browse[0]?.searchText).toContain("studio b");
     expect(snapshot.detail["spin-01"]?.slug).toBe("spin-intervals");
     expect(snapshot.detail["spin-01"]?.location).toEqual(["Studio A", "Studio B"]);
+    expect(snapshot.detail["spin-01"]?.description).toEqual({
+      general: "High-intensity interval training on stationary bikes.",
+      price: "Single-session booking available.",
+    });
+    expect(snapshot.detail["spin-01"]?.price).toEqual({
+      student: 12.9,
+      staff: null,
+      external: 16.9,
+      externalReduced: 9.9,
+      adults: 16.9,
+      children: 9.9,
+      discount: 12.9,
+    });
   });
 
   test("excludes non-public fields and emits manifest keys", () => {

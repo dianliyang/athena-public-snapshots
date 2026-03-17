@@ -2,6 +2,7 @@ import type {
   ManifestSnapshot,
   WorkoutBrowseRecord,
   WorkoutDetailRecord,
+  WorkoutPrice,
   WorkoutsBrowseSnapshot,
   WorkoutsDetailSnapshot,
 } from "../schema";
@@ -11,21 +12,21 @@ type InputWorkout = {
   title: string;
   provider: string;
   category?: string | null;
+  description?: {
+    general?: string;
+    price?: string;
+  } | null;
   weekday?: string | null;
   timeLabel?: string | null;
   location?: string[] | null;
   bookingUrl?: string | null;
   url?: string | null;
-  description?: string | null;
   
   // Flattened details from scraper
   instructor?: string;
   startDate?: string;
   endDate?: string;
-  priceStudent?: number | null;
-  priceStaff?: number | null;
-  priceExternal?: number | null;
-  priceExternalReduced?: number | null;
+  price?: WorkoutPrice;
   bookingStatus?: string;
   semester?: string;
   schedule?: Array<{
@@ -114,10 +115,7 @@ export function buildWorkoutsSnapshot(
       instructor: item.instructor,
       startDate: item.startDate,
       endDate: item.endDate,
-      priceStudent: item.priceStudent,
-      priceStaff: item.priceStaff,
-      priceExternal: item.priceExternal,
-      priceExternalReduced: item.priceExternalReduced,
+      price: item.price,
       bookingStatus: item.bookingStatus,
       semester: item.semester,
       isEntgeltfrei: item.isEntgeltfrei,

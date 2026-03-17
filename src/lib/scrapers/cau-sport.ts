@@ -2,21 +2,6 @@ import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 import { BaseScraper } from "./BaseScraper";
 import { Course } from "./types";
-import { i18n } from "../i18n";
-
-const DAY_MAP: Record<string, string> = {
-  Mo: "Mon",
-  Di: "Tue",
-  Mi: "Wed",
-  Do: "Thu",
-  Fr: "Fri",
-  Sa: "Sat",
-  So: "Sun",
-};
-
-function translateDay(day: string): string {
-  return day.replace(/Mo|Di|Mi|Do|Fr|Sa|So/g, (m) => DAY_MAP[m] || m);
-}
 
 const BOOKING_STATUS_MAP: Record<string, string> = {
   bs_btn_abgelaufen: "expired",
@@ -150,6 +135,10 @@ export interface WorkoutCourse {
   courseCode: string;
   category: string;
   title: string;
+  description?: {
+    general?: string;
+    price?: string;
+  } | null;
   dayOfWeek: string;
   startTime: string;
   endTime: string;
@@ -157,10 +146,12 @@ export interface WorkoutCourse {
   instructor: string;
   startDate: string;
   endDate: string;
-  priceStudent: number | null;
-  priceStaff: number | null;
-  priceExternal: number | null;
-  priceExternalReduced: number | null;
+  price: {
+    student: number | null;
+    staff: number | null;
+    external: number | null;
+    externalReduced: number | null;
+  };
   bookingStatus: string;
   bookingUrl: string;
   url: string;
@@ -716,12 +707,12 @@ export class CAUSport extends BaseScraper {
       if (tzoTable.length > 0) {
         tzoTable.find("tr").each((_, tzotr) => {
           const tzoRow = $(tzotr);
-          const day = tzoRow.find(".bs_stag").text().trim().replace(/\.$/, "");
+          const day = tzoRow.find(".bs_stag").text().trim();
           const time = tzoRow.find(".bs_szeit").text().trim();
           const location = tzoRow.find(".bs_sort").text().replace(/\s+/g, " ").trim();
           if (day || time || location) {
             scheduleEntries.push({
-              day: translateDay(day),
+              day,
               time,
               location,
             });
@@ -741,13 +732,13 @@ export class CAUSport extends BaseScraper {
           return text ? [text] : [];
         };
 
-        const days = parseCellLines(row.find("td.bs_stag")).map((day) => day.replace(/\.$/, ""));
+        const days = parseCellLines(row.find("td.bs_stag"));
         const times = parseCellLines(row.find("td.bs_szeit"));
         const locations = parseCellLines(row.find("td.bs_sort"));
 
         days.forEach((day, i) => {
           scheduleEntries.push({
-            day: translateDay(day),
+            day,
             time: times[i] || times[0] || "",
             location: locations[i] || locations[0] || "",
           });
@@ -838,10 +829,12 @@ export class CAUSport extends BaseScraper {
           instructor,
           startDate: finalStartDate,
           endDate:   finalEndDate,
-          priceStudent:         priceValues[0] ?? null,
-          priceStaff:           priceValues[1] ?? null,
-          priceExternal:        priceValues[2] ?? null,
-          priceExternalReduced: priceValues[3] ?? null,
+          price: {
+            student: priceValues[0] ?? null,
+            staff: priceValues[1] ?? null,
+            external: priceValues[2] ?? null,
+            externalReduced: priceValues[3] ?? null,
+          },
           bookingStatus,
           bookingUrl: bookingUrl ? `https://server.sportzentrum.uni-kiel.de${bookingUrl}` : "",
           url: pageUrl,

@@ -5,6 +5,7 @@ export type WorkerEnv = {
   SNAPSHOTS_BUCKET: R2BucketLike & {
     get?(key: string): Promise<{ text(): Promise<string> } | null>;
   };
+  GOOGLE_TRANSLATE_API_KEY?: string;
 };
 
 type WorkerDeps = {
@@ -12,8 +13,6 @@ type WorkerDeps = {
 };
 
 export function createWorker(deps: WorkerDeps = {}) {
-  const runBuild = deps.buildPublicSnapshots || (() => buildPublicSnapshots());
-
   return {
     async fetch(request: Request, env: WorkerEnv): Promise<Response> {
       const url = new URL(request.url);
@@ -36,7 +35,12 @@ export function createWorker(deps: WorkerDeps = {}) {
       });
     },
     async scheduled(_controller: unknown, env: WorkerEnv, _ctx: unknown): Promise<void> {
-      const snapshots = await runBuild();
+      const snapshots = deps.buildPublicSnapshots
+        ? await deps.buildPublicSnapshots()
+        : await buildPublicSnapshots({}, {
+            localeBucket: env.SNAPSHOTS_BUCKET,
+            translationApiKey: env.GOOGLE_TRANSLATE_API_KEY,
+          });
 
       if (snapshots.courses) {
         await publishSnapshotSet(env.SNAPSHOTS_BUCKET, {

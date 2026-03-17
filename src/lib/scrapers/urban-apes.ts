@@ -25,6 +25,7 @@ const QUICK_OVERVIEW_URL = "https://www.urbanapes.de/kiel/quick-overview/";
 function normalizeText(text: string): string {
   return text
     .replace(/\u00a0/g, " ")
+    .replace(/[’‘]/g, "'")
     .replace(/[–—]/g, "-")
     .replace(/\s+/g, " ")
     .trim();
@@ -97,6 +98,7 @@ export class UrbanApes extends BaseScraper {
     const pricing = this.parsePricing($);
     const pricingNotes = this.parsePricingNotes($);
     const location = this.parseLocation($);
+    const description = this.parseDescription($);
 
     const dayTicket = pricing.find((entry) => entry.label === "Day Ticket");
     const sharedDetails = {
@@ -106,30 +108,39 @@ export class UrbanApes extends BaseScraper {
       pricingNotes,
     };
 
-    return openingHours.map((entry, index) => ({
+    if (openingHours.length === 0) return [];
+
+    return [{
       source: "Urban Apes",
-      courseCode: index === 0 ? "urban-apes-kiel-mon-fri" : "urban-apes-kiel-sat-sun",
-      category: "Climbing",
+      courseCode: "urban-apes-kiel",
+      category: "Bouldering",
       title: "Bouldering",
       titleEn: "urban apes Kiel",
-      dayOfWeek: entry.days,
-      startTime: entry.startTime,
-      endTime: entry.endTime,
+      description,
+      dayOfWeek: openingHours.map((entry) => entry.days).join(", "),
+      startTime: "",
+      endTime: "",
       location: [location],
       locationEn: location,
       instructor: "",
       startDate: "",
       endDate: "",
-      priceStudent: dayTicket?.discounted ?? null,
-      priceStaff: null,
-      priceExternal: dayTicket?.adult ?? null,
-      priceExternalReduced: dayTicket?.children ?? null,
+      price: {
+        adults: dayTicket?.adult ?? null,
+        children: dayTicket?.children ?? null,
+        discount: dayTicket?.discounted ?? null,
+      },
       bookingStatus: "see_text",
       bookingUrl: pageUrl,
       url: pageUrl,
       semester: "",
+      schedule: openingHours.map((entry) => ({
+        day: entry.days,
+        time: `${entry.startTime}-${entry.endTime}`,
+        location,
+      })),
       details: sharedDetails,
-    }));
+    }];
   }
 
   async retrieveWorkouts(categoryName?: string): Promise<WorkoutCourse[]> {
@@ -214,6 +225,50 @@ export class UrbanApes extends BaseScraper {
     return panel.find(".panel-body > p").toArray().map((paragraph) =>
       normalizeText($(paragraph).text()),
     ).filter(Boolean);
+  }
+
+  private parseDescription($: cheerio.CheerioAPI): { general?: string; price?: string } | null {
+    const generalItems = this.parseGeneralDescriptionItems($);
+    const pricingItems = this.parsePricingDescriptionItems($);
+    const description: { general?: string; price?: string } = {};
+
+    if (generalItems.length > 0) description.general = generalItems.join("\n");
+    if (pricingItems.length > 0) description.price = pricingItems.join("\n");
+
+    return Object.keys(description).length > 0 ? description : null;
+  }
+
+  private parseGeneralDescriptionItems($: cheerio.CheerioAPI): string[] {
+    const panel = $(".fusion-panel").filter((_, element) =>
+      normalizeText($(element).find(".fusion-toggle-heading").first().text()) === "Most important information as a glance",
+    ).first();
+
+    if (panel.length === 0) return [];
+
+    return panel.find(".panel-body p").toArray().flatMap((paragraph) => {
+      const html = $(paragraph).html() || "";
+      return html
+        .split(/<br\s*\/?>/i)
+        .map((fragment) => normalizeText(cheerio.load(`<div>${fragment}</div>`)("div").text()))
+        .map((line) => line.replace(/^[•\-\s]+/, "").trim())
+        .filter(Boolean);
+    });
+  }
+
+  private parsePricingDescriptionItems($: cheerio.CheerioAPI): string[] {
+    const panel = $(".fusion-panel").filter((_, element) =>
+      normalizeText($(element).find(".fusion-toggle-heading").first().text()) === "Prices",
+    ).first();
+
+    if (panel.length === 0) return [];
+
+    return panel.find(".panel-body > p").toArray().flatMap((paragraph) => {
+      const html = $(paragraph).html() || "";
+      return html
+        .split(/<br\s*\/?>/i)
+        .map((fragment) => normalizeText(cheerio.load(`<div>${fragment}</div>`)("div").text()))
+        .filter(Boolean);
+    });
   }
 
   private parseLocation($: cheerio.CheerioAPI): string {
