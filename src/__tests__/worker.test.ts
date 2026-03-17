@@ -4,9 +4,23 @@ import type { R2BucketLike } from "../publish/publish-to-r2";
 
 class FakeBucket implements R2BucketLike {
   public writes: Array<{ key: string; value: string }> = [];
+  public reads = new Map<string, string>();
 
   async put(key: string, value: string): Promise<void> {
     this.writes.push({ key, value });
+  }
+
+  async get(key: string): Promise<{ text(): Promise<string> } | null> {
+    const value = this.reads.get(key);
+    if (value === undefined) {
+      return null;
+    }
+
+    return {
+      async text() {
+        return value;
+      },
+    };
   }
 }
 
@@ -51,5 +65,44 @@ describe("worker scheduled publish", () => {
       "workouts/detail/2026-03-17T10-00-00Z.json",
       "workouts/manifest.json",
     ]);
+  });
+
+  test("serves published workout snapshot files over fetch", async () => {
+    const bucket = new FakeBucket();
+    bucket.reads.set("workouts/manifest.json", JSON.stringify({
+      version: "2026-03-17T10-00-00Z",
+      generatedAt: "2026-03-17T10-00-00Z",
+      browseKey: "workouts/browse/2026-03-17T10-00-00Z.json",
+      detailKey: "workouts/detail/2026-03-17T10-00-00Z.json",
+      itemCount: 1,
+    }));
+    bucket.reads.set(
+      "workouts/detail/2026-03-17T10-00-00Z.json",
+      JSON.stringify({ "demo-workout": { id: "demo-workout" } }),
+    );
+
+    const worker = createWorker();
+
+    const manifestResponse = await worker.fetch(
+      new Request("https://athena-public-snapshots.oili.workers.dev/workouts/manifest.json"),
+      { SNAPSHOTS_BUCKET: bucket } as never,
+      {} as never,
+    );
+    const detailResponse = await worker.fetch(
+      new Request("https://athena-public-snapshots.oili.workers.dev/workouts/detail/2026-03-17T10-00-00Z.json"),
+      { SNAPSHOTS_BUCKET: bucket } as never,
+      {} as never,
+    );
+
+    expect(manifestResponse.status).toBe(200);
+    expect(manifestResponse.headers.get("content-type")).toContain("application/json");
+    expect(await manifestResponse.json()).toMatchObject({
+      detailKey: "workouts/detail/2026-03-17T10-00-00Z.json",
+    });
+
+    expect(detailResponse.status).toBe(200);
+    expect(await detailResponse.json()).toEqual({
+      "demo-workout": { id: "demo-workout" },
+    });
   });
 });

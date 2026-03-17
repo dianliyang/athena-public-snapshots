@@ -2,7 +2,9 @@ import { buildPublicSnapshots, type PublicSnapshots } from "./pipeline/build-pub
 import { publishSnapshotSet, type R2BucketLike } from "./publish/publish-to-r2";
 
 export type WorkerEnv = {
-  SNAPSHOTS_BUCKET: R2BucketLike;
+  SNAPSHOTS_BUCKET: R2BucketLike & {
+    get?(key: string): Promise<{ text(): Promise<string> } | null>;
+  };
 };
 
 type WorkerDeps = {
@@ -13,6 +15,26 @@ export function createWorker(deps: WorkerDeps = {}) {
   const runBuild = deps.buildPublicSnapshots || (() => buildPublicSnapshots());
 
   return {
+    async fetch(request: Request, env: WorkerEnv): Promise<Response> {
+      const url = new URL(request.url);
+      const key = url.pathname.replace(/^\/+/, "");
+
+      if (request.method !== "GET" || !key) {
+        return new Response("Not found", { status: 404 });
+      }
+
+      const object = await env.SNAPSHOTS_BUCKET.get?.(key);
+      if (!object) {
+        return new Response("Not found", { status: 404 });
+      }
+
+      return new Response(await object.text(), {
+        headers: {
+          "content-type": "application/json; charset=utf-8",
+          "cache-control": "public, max-age=300",
+        },
+      });
+    },
     async scheduled(_controller: unknown, env: WorkerEnv, _ctx: unknown): Promise<void> {
       const snapshots = await runBuild();
 
