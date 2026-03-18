@@ -1,6 +1,15 @@
-import { describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
+import type { PublicSnapshots } from "../pipeline/build-public-snapshots";
 import { createWorker } from "../worker";
 import type { R2BucketLike } from "../publish/publish-to-r2";
+
+const { buildPublicSnapshotsMock } = vi.hoisted(() => ({
+  buildPublicSnapshotsMock: vi.fn<[], Promise<PublicSnapshots>>(),
+}));
+
+vi.mock("../pipeline/build-public-snapshots", () => ({
+  buildPublicSnapshots: buildPublicSnapshotsMock,
+}));
 
 class FakeBucket implements R2BucketLike {
   public writes: Array<{ key: string; value: string }> = [];
@@ -25,13 +34,37 @@ class FakeBucket implements R2BucketLike {
 }
 
 describe("worker scheduled publish", () => {
-  test("requires GOOGLE_TRANSLATE_API_KEY for the default scheduled snapshot build", async () => {
+  beforeEach(() => {
+    buildPublicSnapshotsMock.mockReset();
+  });
+
+  test("does not require GOOGLE_TRANSLATE_API_KEY for the default scheduled snapshot build", async () => {
     const bucket = new FakeBucket();
+    buildPublicSnapshotsMock.mockResolvedValue({
+      version: "2026-03-17T10-00-00Z",
+      workouts: {
+        manifest: {
+          version: "2026-03-17T10-00-00Z",
+          generatedAt: "2026-03-17T10-00-00Z",
+          browseKey: "workouts/browse/2026-03-17T10-00-00Z.json",
+          detailKey: "workouts/detail/2026-03-17T10-00-00Z.json",
+          itemCount: 1,
+        },
+        browse: [{ id: "cau-1234-01" }],
+        detail: { "cau-1234-01": { id: "cau-1234-01" } },
+      },
+    });
     const worker = createWorker();
 
     await expect(
       worker.scheduled({} as never, { SNAPSHOTS_BUCKET: bucket } as never, {} as never),
-    ).rejects.toThrow("Missing GOOGLE_TRANSLATE_API_KEY for scheduled workout locale translation");
+    ).resolves.toBeUndefined();
+
+    expect(bucket.writes.map((entry) => entry.key)).toEqual([
+      "workouts/browse/2026-03-17T10-00-00Z.json",
+      "workouts/detail/2026-03-17T10-00-00Z.json",
+      "workouts/manifest.json",
+    ]);
   });
 
   test("publishes course and workout JSON snapshots to R2", async () => {

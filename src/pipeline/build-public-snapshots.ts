@@ -43,6 +43,7 @@ export type BuildPublicSnapshotsDeps = {
   retrieveWorkouts?: (target?: string, semester?: string) => Promise<any[]>;
   localeBucket?: LocaleBucketLike;
   warn?: (message: string) => void;
+  log?: (message: string) => void;
   translateText?: TranslateText;
   translationApiKey?: string;
   fetchImpl?: TranslateFetch;
@@ -256,20 +257,39 @@ export async function buildPublicSnapshots(
   const retrieveCourses = deps.retrieveCourses || defaultRetrieveCourses;
   const retrieveWorkouts = deps.retrieveWorkouts || defaultRetrieveWorkouts;
   const warn = deps.warn || ((message: string) => console.warn(message));
+  const log = deps.log || ((message: string) => console.log(message));
   const translateText = deps.translateText || (
     deps.translationApiKey
       ? buildGoogleTranslateText(deps.translationApiKey, deps.fetchImpl)
       : undefined
   );
 
-  const [coursesInput, workoutsInput] = await Promise.all([
-    retrieveCourses(target),
-    retrieveWorkouts(target, options.workoutSemester),
-  ]);
+  log(`Starting public snapshot build for version ${version}${target ? ` (target=${target})` : ""}`);
+
+  let coursesInput: any[] = [];
+  let workoutsInput: any[] = [];
+
+  try {
+    coursesInput = await retrieveCourses(target);
+    log(`Retrieved ${coursesInput.length} course records`);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    warn(`Failed to retrieve courses: ${detail}`);
+  }
+
+  try {
+    workoutsInput = await retrieveWorkouts(target, options.workoutSemester);
+    log(`Retrieved ${workoutsInput.length} workout records`);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    warn(`Failed to retrieve workouts: ${detail}`);
+  }
 
   if (workoutsInput.length > 0 && deps.localeBucket?.put && deps.localeBucket?.get) {
     try {
+      log(`Syncing workout locale maps for ${workoutsInput.length} workout records`);
       await syncWorkoutLocaleMaps(workoutsInput, deps.localeBucket, version, translateText);
+      log("Finished syncing workout locale maps");
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       warn(`Failed to sync workout locale maps: ${detail}`);
@@ -280,13 +300,19 @@ export async function buildPublicSnapshots(
 
   if (coursesInput.length > 0) {
     result.courses = buildCoursesSnapshot(coursesInput, version);
+    log(`Built course snapshot with ${result.courses.manifest.itemCount} items`);
   }
 
   if (workoutsInput.length > 0) {
     result.workouts = buildWorkoutsSnapshot(workoutsInput.map(normalizeWorkoutForSnapshot), version);
     result.workouts.manifest.titleLocaleKey = buildWorkoutTitleLocaleKey(version);
     result.workouts.manifest.categoryLocaleKey = buildWorkoutCategoryLocaleKey(version);
+    log(`Built workout snapshot with ${result.workouts.manifest.itemCount} items`);
   }
+
+  log(
+    `Finished public snapshot build for version ${version} with ${result.courses?.manifest.itemCount || 0} course items and ${result.workouts?.manifest.itemCount || 0} workout items`,
+  );
 
   return result;
 }

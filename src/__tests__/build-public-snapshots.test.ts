@@ -283,4 +283,72 @@ describe("buildPublicSnapshots", () => {
       expect.stringContaining("Failed to sync workout locale maps"),
     ]);
   });
+
+  test("warns and still returns course snapshots when workout retrieval fails", async () => {
+    const warnings: string[] = [];
+
+    const snapshots = await buildPublicSnapshots(
+      { version: "2026-03-17T10-00-00Z" },
+      {
+        retrieveCourses: async () => [
+          {
+            id: "mit-6.006",
+            title: "Introduction to Algorithms",
+            courseCode: "6.006",
+            university: "MIT",
+            description: "Algorithms.",
+          },
+        ],
+        retrieveWorkouts: async () => {
+          throw new Error("workout source unavailable");
+        },
+        warn: (message) => warnings.push(message),
+      },
+    );
+
+    expect(snapshots.courses?.detail["mit-6.006"]?.title).toBe("Introduction to Algorithms");
+    expect(snapshots.workouts).toBeUndefined();
+    expect(warnings).toEqual([
+      expect.stringContaining("Failed to retrieve workouts"),
+    ]);
+  });
+
+  test("logs build stages and item counts", async () => {
+    const logs: string[] = [];
+
+    const snapshots = await buildPublicSnapshots(
+      { version: "2026-03-17T10-00-00Z" },
+      {
+        retrieveCourses: async () => [
+          {
+            id: "mit-6.006",
+            title: "Introduction to Algorithms",
+            courseCode: "6.006",
+            university: "MIT",
+            description: "Algorithms.",
+          },
+        ],
+        retrieveWorkouts: async () => [
+          {
+            id: "cau-1234-01",
+            title: "Yoga",
+            provider: "CAU Kiel Sportzentrum",
+            category: "Mind & Body",
+          },
+        ],
+        log: (message) => logs.push(message),
+      },
+    );
+
+    expect(snapshots.courses?.manifest.itemCount).toBe(1);
+    expect(snapshots.workouts?.manifest.itemCount).toBe(1);
+    expect(logs).toEqual([
+      expect.stringContaining("Starting public snapshot build"),
+      expect.stringContaining("Retrieved 1 course records"),
+      expect.stringContaining("Retrieved 1 workout records"),
+      expect.stringContaining("Built course snapshot with 1 items"),
+      expect.stringContaining("Built workout snapshot with 1 items"),
+      expect.stringContaining("Finished public snapshot build"),
+    ]);
+  });
 });
