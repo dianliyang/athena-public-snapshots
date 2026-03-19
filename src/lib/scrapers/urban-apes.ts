@@ -249,7 +249,7 @@ export class UrbanApes extends BaseScraper {
       const html = $(paragraph).html() || "";
       return html
         .split(/<br\s*\/?>/i)
-        .map((fragment) => normalizeText(cheerio.load(`<div>${fragment}</div>`)("div").text()))
+        .map((fragment) => this.htmlToTextWithLinks(fragment))
         .map((line) => line.replace(/^[•\-\s]+/, "").trim())
         .filter(Boolean);
     });
@@ -266,9 +266,22 @@ export class UrbanApes extends BaseScraper {
       const html = $(paragraph).html() || "";
       return html
         .split(/<br\s*\/?>/i)
-        .map((fragment) => normalizeText(cheerio.load(`<div>${fragment}</div>`)("div").text()))
+        .map((fragment) => this.htmlToTextWithLinks(fragment))
         .filter(Boolean);
     });
+  }
+
+  private htmlToTextWithLinks(html: string): string {
+    const $ = cheerio.load(`<div>${html}</div>`);
+    $("a").each((_, element) => {
+      const node = $(element);
+      const text = node.text().trim();
+      const href = node.attr("href");
+      if (href) {
+        node.replaceWith(`[${text}](${href})`);
+      }
+    });
+    return normalizeText($("div").text());
   }
 
   private parseLocation($: cheerio.CheerioAPI): string {

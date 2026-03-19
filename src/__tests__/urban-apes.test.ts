@@ -21,8 +21,10 @@ describe("UrbanApes.parseWorkouts", () => {
             • Bouldering shoes are offered to rent. Please see price list for rental prices.
           </p>
           <p>
-            • If you come to us regularly, please sign up for a profile.
+            <strong><a href="https://www.urbanapes.de/wp-content/uploads/2022/07/2022_Kiel_einmaligerBesuch_englisch.pdf" target="_blank" rel="noopener">(⇒one-time user statement)</a></strong>
           </p>
+          <p style="text-align: center;">• If you come to us regularly, please sign up for a profile (<a href="https://boulderado.app/register/registration?hash=4SUnDJETksFpGWmz1AvrEGmwkIAcM5fI0oN49vdd" target="_blank" rel="noopener noreferrer"><strong>⇒here</strong></a>) to speed up<br>
+          the entry process.</p>
         </div>
       </div>
       <div class="fusion-panel">
@@ -69,7 +71,7 @@ describe("UrbanApes.parseWorkouts", () => {
       },
     ]);
     expect(workouts[0]?.description).toEqual({
-      general: "No previous experience necessary\nWe don't accept cash - card payment only!\nBouldering shoes are offered to rent. Please see price list for rental prices.\nIf you come to us regularly, please sign up for a profile.",
+      general: "No previous experience necessary\nWe don't accept cash - card payment only!\nBouldering shoes are offered to rent. Please see price list for rental prices.\n[(⇒one-time user statement)](https://www.urbanapes.de/wp-content/uploads/2022/07/2022_Kiel_einmaligerBesuch_englisch.pdf)\nIf you come to us regularly, please sign up for a profile ([⇒here](https://boulderado.app/register/registration?hash=4SUnDJETksFpGWmz1AvrEGmwkIAcM5fI0oN49vdd)) to speed up\nthe entry process.",
       price: "All prices are in euros and include VAT.\n*Children: Ages 4 to 13 (inclusive).\n*Discounted: Applies to individuals aged 14 to 17, pupils, apprentices, students, people with disabilities, recipients of citizen's allowance, unemployment benefits, and pensions, as well as voluntary service members.\nIndividual conditions for companies, clubs, and schools available upon request.\nSchool climbing, events, and other activities can be arranged outside regular opening hours by appointment.",
     });
     expect(workouts[0]?.price).toEqual({
