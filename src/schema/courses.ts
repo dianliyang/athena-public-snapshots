@@ -5,6 +5,7 @@ export type ManifestSnapshot = {
   detailKey: string;
   titleLocaleKey?: string;
   categoryLocaleKey?: string;
+  metadataLocaleKey?: string;
   itemCount: number;
 };
 
@@ -114,6 +115,7 @@ export function isManifestSnapshot(value: unknown): value is ManifestSnapshot {
     typeof value.detailKey === "string" &&
     (value.titleLocaleKey === undefined || typeof value.titleLocaleKey === "string") &&
     (value.categoryLocaleKey === undefined || typeof value.categoryLocaleKey === "string") &&
+    (value.metadataLocaleKey === undefined || typeof value.metadataLocaleKey === "string") &&
     typeof value.itemCount === "number"
   );
 }

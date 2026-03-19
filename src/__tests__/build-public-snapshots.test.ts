@@ -223,6 +223,139 @@ describe("buildPublicSnapshots", () => {
     });
   });
 
+  test("writes workout description metadata locales and reuses translations when original text is unchanged", async () => {
+    const writes = new Map<string, string>();
+    const version = "2026-03-17T10-00-00Z";
+    const metadataKey = `workouts/locales/metadata/${version}.json`;
+    const translateText = vi.fn(async (text: string, target: string) => `${text}-${target}`);
+
+    const bucket = {
+      async get(key: string) {
+        const objects: Record<string, string> = {
+          [metadataKey]: JSON.stringify({
+            "urban-apes-kiel-mon-fri": {
+              description: {
+                general: {
+                  original: "No previous experience necessary",
+                  en: "No previous experience necessary-en-old",
+                  ja: "No previous experience necessary-ja-old",
+                  ko: "No previous experience necessary-ko-old",
+                  "zh-CN": "No previous experience necessary-zh-CN-old",
+                },
+              },
+            },
+          }),
+        };
+
+        const value = objects[key];
+        return value ? { text: async () => value } : null;
+      },
+      async put(key: string, value: string) {
+        writes.set(key, value);
+      },
+    };
+
+    const snapshots = await buildPublicSnapshots(
+      { version, includeCourses: false },
+      {
+        retrieveWorkouts: async () => [
+          {
+            id: "urban-apes-kiel-mon-fri",
+            title: "Bouldering",
+            provider: "Urban Apes",
+            category: "Climbing",
+            description: {
+              general: "No previous experience necessary",
+            },
+          },
+        ],
+        localeBucket: bucket,
+        translateText,
+      },
+    );
+
+    expect(snapshots.workouts?.manifest.metadataLocaleKey).toBe(metadataKey);
+    expect(
+      translateText.mock.calls.some(([text]) => text === "No previous experience necessary"),
+    ).toBe(false);
+    expect(writes.has(metadataKey)).toBe(false);
+  });
+
+  test("retranslates workout description metadata when original text changed and skips empty description fields", async () => {
+    const writes = new Map<string, string>();
+    const version = "2026-03-17T10-00-00Z";
+    const metadataKey = `workouts/locales/metadata/${version}.json`;
+    const translateText = vi.fn(async (text: string, target: string) => `${text}-${target}`);
+
+    const bucket = {
+      async get(key: string) {
+        const objects: Record<string, string> = {
+          [metadataKey]: JSON.stringify({
+            "urban-apes-kiel-mon-fri": {
+              description: {
+                general: {
+                  original: "Old text",
+                  en: "Old text-en",
+                  ja: "Old text-ja",
+                  ko: "Old text-ko",
+                  "zh-CN": "Old text-zh-CN",
+                },
+              },
+            },
+          }),
+        };
+
+        const value = objects[key];
+        return value ? { text: async () => value } : null;
+      },
+      async put(key: string, value: string) {
+        writes.set(key, value);
+      },
+    };
+
+    await buildPublicSnapshots(
+      { version, includeCourses: false },
+      {
+        retrieveWorkouts: async () => [
+          {
+            id: "urban-apes-kiel-mon-fri",
+            title: "Bouldering",
+            provider: "Urban Apes",
+            category: "Climbing",
+            description: {
+              general: "Updated text",
+              price: "   ",
+            },
+          },
+        ],
+        localeBucket: bucket,
+        translateText,
+      },
+    );
+
+    const updatedTextCalls = translateText.mock.calls.filter(([text]) => text === "Updated text");
+    expect(updatedTextCalls).toHaveLength(4);
+    expect(updatedTextCalls).toContainEqual(["Updated text", "en"]);
+    expect(updatedTextCalls).toContainEqual(["Updated text", "ja"]);
+    expect(updatedTextCalls).toContainEqual(["Updated text", "ko"]);
+    expect(updatedTextCalls).toContainEqual(["Updated text", "zh-CN"]);
+
+    expect(JSON.parse(writes.get(metadataKey) || "{}")).toEqual({
+      "urban-apes-kiel-mon-fri": {
+        description: {
+          general: {
+            original: "Updated text",
+            de: "Updated text",
+            en: "Updated text-en",
+            ja: "Updated text-ja",
+            ko: "Updated text-ko",
+            "zh-CN": "Updated text-zh-CN",
+          },
+        },
+      },
+    });
+  });
+
   test("uses the Google Translate API request shape when translationApiKey is provided", async () => {
     const writes = new Map<string, string>();
     const requests: Array<{
@@ -330,6 +463,7 @@ describe("buildPublicSnapshots", () => {
 
     expect(snapshots.workouts?.manifest.titleLocaleKey).toBe(`workouts/locales/title/${version}.json`);
     expect(snapshots.workouts?.manifest.categoryLocaleKey).toBe(`workouts/locales/category/${version}.json`);
+    expect(snapshots.workouts?.manifest.metadataLocaleKey).toBe(`workouts/locales/metadata/${version}.json`);
   });
 
   test("warns and continues when locale sync fails", async () => {

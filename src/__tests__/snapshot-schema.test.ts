@@ -14,6 +14,7 @@ const manifest = {
   detailKey: "courses/detail/2026-03-15T12-00-00Z.json",
   titleLocaleKey: "workouts/locales/title/2026-03-15T12-00-00Z.json",
   categoryLocaleKey: "workouts/locales/category/2026-03-15T12-00-00Z.json",
+  metadataLocaleKey: "workouts/locales/metadata/2026-03-15T12-00-00Z.json",
   itemCount: 4,
 };
 

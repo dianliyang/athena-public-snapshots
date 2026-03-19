@@ -30,6 +30,9 @@ describe("createLocalSnapshotBucket", () => {
             title: "Bowling",
             provider: "Ricks Club",
             category: "Bowling Games",
+            description: {
+              general: "Family-friendly bowling lanes",
+            },
           },
         ],
         localeBucket: bucket,
@@ -39,9 +42,11 @@ describe("createLocalSnapshotBucket", () => {
 
     const titleLocalePath = path.join(rootDir, "workouts/locales/title", `${version}.json`);
     const categoryLocalePath = path.join(rootDir, "workouts/locales/category", `${version}.json`);
+    const metadataLocalePath = path.join(rootDir, "workouts/locales/metadata", `${version}.json`);
 
     expect(snapshots.workouts?.manifest.titleLocaleKey).toBe(`workouts/locales/title/${version}.json`);
     expect(snapshots.workouts?.manifest.categoryLocaleKey).toBe(`workouts/locales/category/${version}.json`);
+    expect(snapshots.workouts?.manifest.metadataLocaleKey).toBe(`workouts/locales/metadata/${version}.json`);
     expect(JSON.parse(fs.readFileSync(titleLocalePath, "utf8")).Bowling).toEqual({
       en: "Bowling-en",
       de: "Bowling",
@@ -55,6 +60,20 @@ describe("createLocalSnapshotBucket", () => {
       ja: "Bowling Games-ja",
       ko: "Bowling Games-ko",
       "zh-CN": "Bowling Games-zh-CN",
+    });
+    expect(JSON.parse(fs.readFileSync(metadataLocalePath, "utf8"))).toEqual({
+      "ricks-club-bowling": {
+        description: {
+          general: {
+            original: "Family-friendly bowling lanes",
+            de: "Family-friendly bowling lanes",
+            en: "Family-friendly bowling lanes-en",
+            ja: "Family-friendly bowling lanes-ja",
+            ko: "Family-friendly bowling lanes-ko",
+            "zh-CN": "Family-friendly bowling lanes-zh-CN",
+          },
+        },
+      },
     });
   });
 
