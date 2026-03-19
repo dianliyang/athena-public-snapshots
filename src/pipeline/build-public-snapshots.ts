@@ -63,6 +63,13 @@ export type BuildPublicSnapshotsDeps = {
   fetchImpl?: TranslateFetch;
 };
 
+export type SyncWorkoutMetadataLocalesDeps = {
+  localeBucket: LocaleBucketLike;
+  translateText?: TranslateText;
+  translationApiKey?: string;
+  fetchImpl?: TranslateFetch;
+};
+
 const ALL_WORKOUT_SOURCES: Array<"cau-sport" | "urban-apes" | "ricks-club"> = ["cau-sport", "urban-apes", "ricks-club"];
 
 function normalizeWorkoutForSnapshot(workout: any) {
@@ -270,6 +277,21 @@ async function syncWorkoutMetadataLocaleMap(
   if (changed) {
     await bucket.put(metadataKey, JSON.stringify(nextMap, null, 2));
   }
+}
+
+export async function syncWorkoutMetadataLocales(
+  workouts: any[],
+  version: string,
+  deps: SyncWorkoutMetadataLocalesDeps,
+): Promise<string> {
+  const translateText = deps.translateText || (
+    deps.translationApiKey
+      ? buildGoogleTranslateText(deps.translationApiKey, deps.fetchImpl)
+      : undefined
+  );
+
+  await syncWorkoutMetadataLocaleMap(workouts, deps.localeBucket, version, translateText);
+  return buildWorkoutMetadataLocaleKey(version);
 }
 
 async function syncWorkoutLocaleMaps(

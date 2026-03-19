@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "build-snapshots": "tsx src/run-scraper-to-snapshot.ts"
+    "build-snapshots": "tsx src/run-scraper-to-snapshot.ts",
+    "translate-workout-metadata": "tsx src/run-local-workout-metadata-translation.ts"
   },
   "devDependencies": {
     "@types/node": "^20.11.24",

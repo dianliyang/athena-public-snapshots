@@ -3,7 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { createLocalSnapshotBucket } from "../local/local-snapshot-bucket";
-import { buildPublicSnapshots } from "../pipeline/build-public-snapshots";
+import { buildPublicSnapshots, syncWorkoutMetadataLocales } from "../pipeline/build-public-snapshots";
 
 let tempDirs: string[] = [];
 
@@ -149,5 +149,35 @@ describe("createLocalSnapshotBucket", () => {
       ko: "Bowling Games-ko",
       "zh-CN": "Bowling Games-zh-CN",
     });
+  });
+
+  test("syncs workout metadata locales without rebuilding other locale files", async () => {
+    const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "athena-local-bucket-"));
+    tempDirs.push(rootDir);
+    const bucket = createLocalSnapshotBucket(rootDir);
+    const version = "2026-03-17T10-00-00Z";
+
+    const metadataLocaleKey = await syncWorkoutMetadataLocales(
+      [
+        {
+          id: "ricks-club-bowling",
+          description: {
+            general: "Family-friendly bowling lanes",
+          },
+        },
+      ],
+      version,
+      {
+        localeBucket: bucket,
+        translateText: async (text, target) => `${text}-${target}`,
+      },
+    );
+
+    const metadataLocalePath = path.join(rootDir, "workouts/locales/metadata", `${version}.json`);
+
+    expect(metadataLocaleKey).toBe(`workouts/locales/metadata/${version}.json`);
+    expect(fs.existsSync(metadataLocalePath)).toBe(true);
+    expect(fs.existsSync(path.join(rootDir, "workouts/locales/title", `${version}.json`))).toBe(false);
+    expect(fs.existsSync(path.join(rootDir, "workouts/locales/category", `${version}.json`))).toBe(false);
   });
 });
