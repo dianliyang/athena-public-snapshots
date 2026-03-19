@@ -1,16 +1,28 @@
 import { buildPublicSnapshots } from './pipeline/build-public-snapshots';
+import { loadLocalEnv } from "./local/load-local-env";
+import { createLocalSnapshotBucket } from "./local/local-snapshot-bucket";
 import * as fs from 'fs';
 import * as path from 'path';
 
 async function main() {
+  loadLocalEnv();
+
   const args = process.argv.slice(2);
   const targetUni = args.find(arg => arg.startsWith('--target='))?.split('=')[1]?.toLowerCase();
 
   const version = new Date().toISOString().replace(/[:.]/g, '-');
   const outDir = path.join(process.cwd(), 'out');
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir);
+  const localBucket = createLocalSnapshotBucket(outDir);
 
-  const snapshots = await buildPublicSnapshots({ version, target: targetUni, workoutSemester: 'wi25' });
+  const snapshots = await buildPublicSnapshots({
+    version,
+    target: targetUni,
+    includeCourses: false,
+  }, {
+    localeBucket: localBucket,
+    translationApiKey: process.env.GOOGLE_TRANSLATE_API_KEY,
+  });
 
   // 1. Courses
   if (snapshots.courses) {

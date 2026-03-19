@@ -16,6 +16,17 @@ export function parseCMUSemester(code: string): { term: string; year: number } {
   return { term, year };
 }
 
+export function buildCurrentWorkoutSemester(now = new Date()): string {
+  const month = now.getUTCMonth() + 1;
+  const year = now.getUTCFullYear() % 100;
+
+  if (month >= 10) {
+    return `wi${String(year).padStart(2, "0")}`;
+  }
+
+  return `su${String(year).padStart(2, "0")}`;
+}
+
 export function parseSemesterCode(code: string): { term: string; year: number } {
   const input = code.toLowerCase();
   const yearNum = parseInt(input.replace(/\D/g, "")) || 25;

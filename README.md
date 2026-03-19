@@ -10,6 +10,6 @@ This repo can run as a scheduled Cloudflare Worker and publish the JSON snapshot
 - R2 binding: `SNAPSHOTS_BUCKET`
 - Target bucket: `athena-public-catalogs`
 - Required worker secret: `GOOGLE_TRANSLATE_API_KEY`
-- Default cron: every 6 hours via [`wrangler.jsonc`](wrangler.jsonc)
+- Default cron: every day at 22:00 UTC via [`wrangler.jsonc`](wrangler.jsonc)
 
-The scheduled Worker publishes only the JSON snapshot artifacts. It does not update Vectorize indexes.
+The scheduled Worker publishes workout JSON snapshot artifacts only. It does not scrape courses or update Vectorize indexes.

@@ -3,6 +3,7 @@ import { Stanford } from "../lib/scrapers/stanford";
 import { CMU } from "../lib/scrapers/cmu";
 import { UCB } from "../lib/scrapers/ucb";
 import { retrieveWorkoutSourceBatches } from "../lib/scrapers/workout-sources";
+import { buildCurrentWorkoutSemester } from "../lib/scrapers/utils/semester";
 import { buildCoursesSnapshot } from "../build/build-courses-snapshot";
 import { buildWorkoutsSnapshot } from "../build/build-workouts-snapshot";
 import type { R2BucketLike } from "../publish/publish-to-r2";
@@ -36,6 +37,8 @@ export type BuildPublicSnapshotsOptions = {
   version?: string;
   target?: string;
   workoutSemester?: string;
+  includeCourses?: boolean;
+  includeWorkouts?: boolean;
 };
 
 export type BuildPublicSnapshotsDeps = {
@@ -234,7 +237,10 @@ async function defaultRetrieveCourses(target?: string): Promise<any[]> {
   return allCourses;
 }
 
-async function defaultRetrieveWorkouts(target?: string, semester = "wi25"): Promise<any[]> {
+async function defaultRetrieveWorkouts(
+  target?: string,
+  semester = buildCurrentWorkoutSemester(),
+): Promise<any[]> {
   const normalizedTarget = target?.toLowerCase();
   const workoutSources = normalizedTarget
     ? ALL_WORKOUT_SOURCES.filter((source) => source === normalizedTarget)
@@ -254,6 +260,8 @@ export async function buildPublicSnapshots(
 ): Promise<PublicSnapshots> {
   const version = options.version || buildVersion();
   const target = options.target?.toLowerCase();
+  const includeCourses = options.includeCourses ?? true;
+  const includeWorkouts = options.includeWorkouts ?? true;
   const retrieveCourses = deps.retrieveCourses || defaultRetrieveCourses;
   const retrieveWorkouts = deps.retrieveWorkouts || defaultRetrieveWorkouts;
   const warn = deps.warn || ((message: string) => console.warn(message));
@@ -269,20 +277,27 @@ export async function buildPublicSnapshots(
   let coursesInput: any[] = [];
   let workoutsInput: any[] = [];
 
-  try {
-    coursesInput = await retrieveCourses(target);
-    log(`Retrieved ${coursesInput.length} course records`);
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    warn(`Failed to retrieve courses: ${detail}`);
+  if (includeCourses) {
+    try {
+      coursesInput = await retrieveCourses(target);
+      log(`Retrieved ${coursesInput.length} course records`);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      warn(`Failed to retrieve courses: ${detail}`);
+    }
   }
 
-  try {
-    workoutsInput = await retrieveWorkouts(target, options.workoutSemester);
-    log(`Retrieved ${workoutsInput.length} workout records`);
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    warn(`Failed to retrieve workouts: ${detail}`);
+  if (includeWorkouts) {
+    try {
+      workoutsInput = await retrieveWorkouts(
+        target,
+        options.workoutSemester ?? buildCurrentWorkoutSemester(),
+      );
+      log(`Retrieved ${workoutsInput.length} workout records`);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      warn(`Failed to retrieve workouts: ${detail}`);
+    }
   }
 
   if (workoutsInput.length > 0 && deps.localeBucket?.put && deps.localeBucket?.get) {

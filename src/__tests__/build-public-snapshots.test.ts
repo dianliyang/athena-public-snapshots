@@ -1,7 +1,88 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { buildPublicSnapshots } from "../pipeline/build-public-snapshots";
 
 describe("buildPublicSnapshots", () => {
+  test("skips course retrieval when courses are disabled", async () => {
+    const retrieveCourses = vi.fn(async () => [
+      {
+        id: "mit-6.006",
+        title: "Introduction to Algorithms",
+        courseCode: "6.006",
+        university: "MIT",
+        description: "Algorithms.",
+      },
+    ]);
+
+    const snapshots = await buildPublicSnapshots(
+      { version: "2026-03-17T10-00-00Z", includeCourses: false },
+      {
+        retrieveCourses,
+        retrieveWorkouts: async () => [
+          {
+            id: "cau-1234-01",
+            title: "Yoga",
+            provider: "CAU Kiel Sportzentrum",
+            category: "Mind & Body",
+          },
+        ],
+      },
+    );
+
+    expect(retrieveCourses).not.toHaveBeenCalled();
+    expect(snapshots.courses).toBeUndefined();
+    expect(snapshots.workouts?.detail["cau-1234-01"]?.title).toBe("Yoga");
+  });
+
+  test("skips workout retrieval when workouts are disabled", async () => {
+    const retrieveWorkouts = vi.fn(async () => [
+      {
+        id: "cau-1234-01",
+        title: "Yoga",
+        provider: "CAU Kiel Sportzentrum",
+        category: "Mind & Body",
+      },
+    ]);
+
+    const snapshots = await buildPublicSnapshots(
+      { version: "2026-03-17T10-00-00Z", includeWorkouts: false },
+      {
+        retrieveCourses: async () => [
+          {
+            id: "mit-6.006",
+            title: "Introduction to Algorithms",
+            courseCode: "6.006",
+            university: "MIT",
+            description: "Algorithms.",
+          },
+        ],
+        retrieveWorkouts,
+      },
+    );
+
+    expect(retrieveWorkouts).not.toHaveBeenCalled();
+    expect(snapshots.courses?.detail["mit-6.006"]?.title).toBe("Introduction to Algorithms");
+    expect(snapshots.workouts).toBeUndefined();
+  });
+
+  test("uses the current workout semester when none is provided", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-19T12:00:00Z"));
+    const retrieveWorkouts = vi.fn(async () => []);
+
+    try {
+      await buildPublicSnapshots(
+        { version: "2026-03-17T10-00-00Z", includeCourses: false },
+        {
+          retrieveWorkouts,
+        },
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(retrieveWorkouts).toHaveBeenCalledWith(undefined, "su26");
+  });
+
   test("builds course and workout snapshots in memory", async () => {
     const snapshots = await buildPublicSnapshots(
       { version: "2026-03-17T10-00-00Z" },

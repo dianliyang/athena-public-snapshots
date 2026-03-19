@@ -65,6 +65,14 @@ describe("worker scheduled publish", () => {
       "workouts/detail/2026-03-17T10-00-00Z.json",
       "workouts/manifest.json",
     ]);
+
+    expect(buildPublicSnapshotsMock).toHaveBeenCalledWith(
+      { includeCourses: false },
+      {
+        localeBucket: bucket,
+        translationApiKey: undefined,
+      },
+    );
   });
 
   test("publishes course and workout JSON snapshots to R2", async () => {

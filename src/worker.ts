@@ -37,7 +37,7 @@ export function createWorker(deps: WorkerDeps = {}) {
     async scheduled(_controller: unknown, env: WorkerEnv, _ctx: unknown): Promise<void> {
       const snapshots = deps.buildPublicSnapshots
         ? await deps.buildPublicSnapshots()
-        : await buildPublicSnapshots({}, {
+        : await buildPublicSnapshots({ includeCourses: false }, {
             localeBucket: env.SNAPSHOTS_BUCKET,
             translationApiKey: env.GOOGLE_TRANSLATE_API_KEY,
           });

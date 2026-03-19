@@ -2,6 +2,7 @@ import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 import { BaseScraper } from "./BaseScraper";
 import { Course } from "./types";
+import { buildCurrentWorkoutSemester } from "./utils/semester";
 
 const BOOKING_STATUS_MAP: Record<string, string> = {
   bs_btn_abgelaufen: "expired",
@@ -237,9 +238,7 @@ export class CAUSport extends BaseScraper {
     const isSummer = input.includes("su") || input.includes("summer");
     const isSpring = input.includes("sp") || input.includes("spring");
 
-    // Current/upcoming transition semesters → use live path
-    if (isWinter && yearNum === 25) return "aktueller_zeitraum";
-    if (isSpring && yearNum === 26) return "aktueller_zeitraum";
+    if (input === buildCurrentWorkoutSemester()) return "aktueller_zeitraum";
 
     // Named archive paths
     if (isWinter) return `wintersemester_${yearNum}_${yearNum + 1}`;
