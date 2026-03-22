@@ -22,13 +22,10 @@ const workoutsDetail = {
     title: "Spin Intervals",
     provider: "UniSport",
     category: "Cycling",
-    description: {
-      general: "High-intensity interval training on stationary bikes.",
-      price: "Drop-in pricing available at front desk.",
-    },
     schedule: [{ day: "Monday", time: "18:00-19:00", location: "Studio A" }],
     location: ["Studio A", "Studio B"],
     url: "https://example.com/workouts/spin",
+    sessionCount: 3,
     price: {
       student: 12.9,
       staff: null,

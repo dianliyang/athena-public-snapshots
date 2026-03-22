@@ -22,6 +22,7 @@ type DetailData = {
   instructor?: string;
   location: string[];
   schedule: NonNullable<WorkoutCourse["schedule"]>;
+  sessionCount?: number;
   details: Record<string, unknown>;
 };
 
@@ -70,7 +71,8 @@ function parseDateRange(input: string): { startDate: string; endDate: string } {
 }
 
 function parsePriceValue(input: string): number | null {
-  const normalized = normalizeText(input).replace(/[^\d.,-]/g, "").replace(",", ".");
+  const match = normalizeText(input).match(/-?\d+(?:[.,]\d+)?/);
+  const normalized = match?.[0]?.replace(",", ".") || "";
   if (!normalized) return null;
   const value = Number.parseFloat(normalized);
   return Number.isFinite(value) ? value : null;
@@ -80,22 +82,35 @@ function parsePrice(priceText: string) {
   if (/kostenlos/i.test(priceText)) {
     return {
       student: 0,
-      staff: 0,
+      staff: null,
       external: 0,
-      externalReduced: 0,
+      externalReduced: null,
     };
   }
 
-  const values = priceText
-    .split(/\s+oder\s+/i)
+  const normalized = normalizeText(priceText);
+  const studentMatch = normalized.match(/(?:student(?:en)?|studierende?)[^\d]*(-?\d+(?:[.,]\d+)?)/i);
+  const externalMatch = normalized.match(/(?:external|extern(?:e|al)?|gaeste|gaste|gäste)[^\d]*(-?\d+(?:[.,]\d+)?)/i);
+
+  if (studentMatch || externalMatch) {
+    return {
+      student: parsePriceValue(studentMatch?.[1] || ""),
+      staff: null,
+      external: parsePriceValue(externalMatch?.[1] || ""),
+      externalReduced: null,
+    };
+  }
+
+  const values = normalized
+    .split(/\s+(?:oder|\/)\s+/i)
     .map((part) => parsePriceValue(part))
     .filter((value): value is number => value !== null);
 
   return {
     student: values[0] ?? null,
-    staff: values[1] ?? values[0] ?? null,
-    external: values[2] ?? values[1] ?? values[0] ?? null,
-    externalReduced: values[3] ?? values[2] ?? values[1] ?? values[0] ?? null,
+    staff: null,
+    external: values[1] ?? values[0] ?? null,
+    externalReduced: null,
   };
 }
 
@@ -115,7 +130,7 @@ function parsePlaces(placesRaw: string) {
 function mapBookingStatus(label: string): string {
   const normalized = normalizeText(label).toLowerCase();
   if (!normalized) return "unknown";
-  if (normalized.includes("buchbar")) return "available";
+  if (normalized.includes("buchbar") || normalized.includes("bookable")) return "available";
   if (normalized.includes("warteliste")) return "waitlist";
   if (normalized.includes("ausgebucht")) return "fully_booked";
   if (normalized.includes("gesperrt")) return "blocked";
@@ -130,6 +145,27 @@ function extractTextLines(node: cheerio.Cheerio<any>): string[] {
     .split(/\n+/)
     .map((line) => normalizeText(line))
     .filter(Boolean);
+}
+
+function extractNormalizedTextWithLineBreaks(node: cheerio.Cheerio<any>): string {
+  const root = node.clone();
+  root.find("br").replaceWith("\n");
+
+  return root
+    .text()
+    .split("\n")
+    .map((line) => normalizeText(line))
+    .filter(Boolean)
+    .join("\n");
+}
+
+function normalizeLocationParts(parts: string[]): string {
+  const cleanedParts = parts
+    .map((part) => normalizeText(part).replace(/^,\s*/, ""))
+    .filter(Boolean);
+
+  return normalizeText(cleanedParts.join(", "))
+    .replace(/^, /, "");
 }
 
 function unique(values: string[]): string[] {
@@ -229,6 +265,7 @@ export class HAWKielSport extends BaseScraper {
         instructor: detail.instructor || "",
         startDate,
         endDate,
+        sessionCount: detail.sessionCount,
         price,
         bookingStatus: mapBookingStatus(row.statusLabel),
         bookingUrl: row.detailUrl,
@@ -295,34 +332,34 @@ export class HAWKielSport extends BaseScraper {
 
   parseDetailPage(html: string): DetailData {
     const $ = cheerio.load(html);
-    const sectionByLabel = (label: string) => this.findDetailSection($, label);
+    const sectionByLabels = (...labels: string[]) =>
+      this.findDetailSectionByLabels($, labels);
 
-    const descriptionSection = sectionByLabel("Beschreibung");
+    const descriptionSection = sectionByLabels("Beschreibung", "Description");
     const descriptionText = descriptionSection.length > 0
-      ? this.extractSectionText($, descriptionSection, "Beschreibung")
+      ? this.extractSectionText($, descriptionSection, "Beschreibung", "Description")
       : "";
 
-    const priceSection = sectionByLabel("Preise");
+    const priceSection = sectionByLabels("Preise", "Prices");
     const priceText = priceSection.length > 0
-      ? this.extractSectionText($, priceSection, "Preise")
+      ? this.extractSectionText($, priceSection, "Preise", "Prices")
       : "";
 
-    const instructorSection = sectionByLabel("Instructor").length > 0
-      ? sectionByLabel("Instructor")
-      : sectionByLabel("Leitung");
+    const instructorSection = sectionByLabels("Instructor", "Leitung");
     const instructor = instructorSection.length > 0
-      ? this.extractSectionText($, instructorSection, normalizeText(instructorSection.find("h1, h2, h3, h4, p, span").first().text()) || "Instructor")
+      ? this.extractSectionText($, instructorSection, "Instructor", "Leitung")
       : "";
 
-    const categorySection = sectionByLabel("Kategorien");
+    const categorySection = sectionByLabels("Kategorien", "Categories");
     const category = categorySection.length > 0
       ? normalizeText(categorySection.find("li").map((_, item) => $(item).text()).get().join(", ") || categorySection.text())
       : "";
 
-    const schedule = this.parseAppointmentsTable(sectionByLabel("Termine"));
-    const locationSection = sectionByLabel("Ort");
+    const appointmentsSection = sectionByLabels("Termine", "Appointments");
+    const { schedule, sessionCount } = this.parseAppointmentsTable(appointmentsSection);
+    const locationSection = sectionByLabels("Ort", "Location");
     const explicitLocations = locationSection.length > 0
-      ? [this.extractSectionText($, locationSection, "Ort")]
+      ? [this.extractSectionText($, locationSection, "Ort", "Location")]
       : [];
     const locations = unique([
       ...explicitLocations,
@@ -343,6 +380,7 @@ export class HAWKielSport extends BaseScraper {
       instructor: /nicht bekannt/i.test(instructor) ? "" : instructor,
       location: locations,
       schedule,
+      sessionCount,
       details: {
         rawCategory: category,
         descriptionLines: detailLines,
@@ -350,40 +388,90 @@ export class HAWKielSport extends BaseScraper {
     };
   }
 
-  private parseAppointmentsTable(section: cheerio.Cheerio<any>): NonNullable<WorkoutCourse["schedule"]> {
-    if (section.length === 0) return [];
+  private parseAppointmentsTable(section: cheerio.Cheerio<any>): {
+    schedule: NonNullable<WorkoutCourse["schedule"]>;
+    sessionCount: number;
+  } {
+    if (section.length === 0) return { schedule: [], sessionCount: 0 };
 
-    const schedule: NonNullable<WorkoutCourse["schedule"]> = [];
+    const sectionText = normalizeText(section.text());
+    const summaryMatch = sectionText.match(
+      /(?:\b\d+\b)\s+(?:to|bis)\s+(?:\d+)\s+(?:of|von)\s+(\d+)\s+(?:results|ergebnisse)/i,
+    );
+    const summaryCount = summaryMatch ? Number.parseInt(summaryMatch[1], 10) : 0;
+
+    const groupedSchedule = new Map<string, {
+      days: string[];
+      time: string;
+      location: string;
+    }>();
+    let rowCount = 0;
     const table$ = cheerio.load(section.html() || "");
 
     table$("tbody tr").each((_, row) => {
       const cells = table$(row).find("td");
       const values = cells.toArray().map((cell) => normalizeText(table$(cell).text()));
-      if (values.length < 6) return;
+      if (values.length < 4) return;
 
-      const dateLabel = values[1];
-      const startTime = values[2];
-      const endTime = values[3];
-      const venue = values[4];
-      const address = values[5];
+      let dateLabel = "";
+      let startTime = "";
+      let endTime = "";
+      let venue = "";
+      let address = "";
+
+      if (values.length >= 6) {
+        dateLabel = values[1];
+        startTime = values[2];
+        endTime = values[3];
+        venue = values[4];
+        address = values[5];
+      } else {
+        dateLabel = values[0];
+        startTime = values[1];
+        endTime = values[2];
+
+        const locationLines = extractNormalizedTextWithLineBreaks(table$(cells[3]))
+          .split("\n")
+          .map((value) => normalizeText(value))
+          .filter(Boolean);
+        venue = locationLines[0] || "";
+        address = locationLines.slice(1).join(", ");
+      }
+
       const day = normalizeText(dateLabel.split(",")[0] || "");
-      const location = normalizeText([venue, address].filter((value) => value && !/^,$/.test(value)).join(", "))
-        .replace(/^, /, "")
-        .replace(/^Nicht bekannt,\s*/i, "")
-        || venue;
+      const location = normalizeLocationParts([venue, address]) || venue;
+      const time = startTime && endTime ? `${startTime}-${endTime}` : normalizeText([startTime, endTime].filter(Boolean).join("-"));
 
-      if (!day && !startTime && !endTime && !location) return;
+      if (!day && !time && !location) return;
+      rowCount += 1;
 
-      schedule.push({
-        day,
-        time: startTime && endTime ? `${startTime}-${endTime}` : normalizeText([startTime, endTime].filter(Boolean).join("-")),
-        location: normalizeText(location),
+      const normalizedLocation = normalizeText(location);
+      const groupKey = [startTime, endTime, venue, address]
+        .map((value) => normalizeText(value))
+        .join("|");
+      const existing = groupedSchedule.get(groupKey);
+      if (existing) {
+        if (day && !existing.days.includes(day)) existing.days.push(day);
+        return;
+      }
+
+      groupedSchedule.set(groupKey, {
+        days: day ? [day] : [],
+        time,
+        location: normalizedLocation,
       });
     });
 
-    if (schedule.length > 0) return schedule;
+    const schedule = Array.from(groupedSchedule.values()).map((entry) => ({
+      day: entry.days.join(", "),
+      time: entry.time,
+      location: entry.location,
+    }));
+    let sessionCount = summaryCount || rowCount;
 
-    const text = normalizeText(section.text()).replace(/^Termine\s+/i, "");
+    if (schedule.length > 0) return { schedule, sessionCount };
+
+    const text = sectionText.replace(/^(?:Termine|Appointments)\s+/i, "");
     const textMatch = text.match(/^([^,]+),\s*(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/);
     if (textMatch) {
       schedule.push({
@@ -391,9 +479,10 @@ export class HAWKielSport extends BaseScraper {
         time: `${textMatch[2]}-${textMatch[3]}`,
         location: "",
       });
+      sessionCount = Math.max(sessionCount, summaryCount || rowCount || 1);
     }
 
-    return schedule;
+    return { schedule, sessionCount };
   }
 
   private extractLocationsFromDescription(description: string): string[] {
@@ -422,18 +511,36 @@ export class HAWKielSport extends BaseScraper {
     return heading;
   }
 
+  private findDetailSectionByLabels(
+    $: cheerio.CheerioAPI,
+    labels: string[],
+  ): cheerio.Cheerio<any> {
+    for (const label of labels) {
+      const directSection = $(`section[aria-label="${label}"]`).first();
+      if (directSection.length > 0) return directSection;
+    }
+
+    for (const label of labels) {
+      const section = this.findDetailSection($, label);
+      if (section.length > 0) return section;
+    }
+
+    return cheerio.load("")("section");
+  }
+
   private extractSectionText(
     $: cheerio.CheerioAPI,
     section: cheerio.Cheerio<any>,
-    label: string,
+    ...labels: string[]
   ): string {
     const container = section.find(".bg-base-100").first();
     const root = container.length > 0 ? container.clone() : section.clone();
     root.find("h1, h2, h3, h4").remove();
-    root.find("p, span").filter((_, element) => normalizeText($(element).text()) === label).remove();
-    const text = normalizeText(root.text())
-      .replace(new RegExp(`^${label}\\s*`, "i"), "")
-      .trim();
+    root.find("p, span").filter((_, element) => labels.includes(normalizeText($(element).text()))).remove();
+    let text = extractNormalizedTextWithLineBreaks(root).trim();
+    for (const label of labels) {
+      text = text.replace(new RegExp(`^${label}\\s*`, "i"), "").trim();
+    }
     return text;
   }
 

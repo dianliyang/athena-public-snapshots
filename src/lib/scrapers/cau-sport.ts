@@ -175,6 +175,15 @@ function getMaxAgeMs(cacheControl: string | null): number {
   return match ? Number(match[1]) * 1000 : 0;
 }
 
+function parseCategoryPageNotes(html: string): string[] {
+  const $ = cheerio.load(html);
+
+  return $("#bs_content .bs_angblock .bs_kursbeschreibung .bslang_de")
+    .map((_, node) => $(node).text().replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim())
+    .get()
+    .filter(Boolean);
+}
+
 export class CAUSport extends BaseScraper {
   private static pageCache = new Map<string, CachedPageEntry>();
   private prefetchedIndexHtml: string | null = null;
@@ -527,14 +536,15 @@ export class CAUSport extends BaseScraper {
     return segments;
   }
 
-  async parseDurationPageMetadata(url: string): Promise<{ dates: string[]; locations: string[] }> {
-    if (!url) return { dates: [], locations: [] };
+  async parseDurationPageMetadata(url: string): Promise<{ dates: string[]; locations: string[]; notes: string[] }> {
+    if (!url) return { dates: [], locations: [], notes: [] };
     const html = await this.fetchPage(url);
-    if (!html) return { dates: [], locations: [] };
+    if (!html) return { dates: [], locations: [], notes: [] };
 
     const $ = cheerio.load(html);
     const datesSet = new Set<string>();
     const locationsSet = new Set<string>();
+    const notes: string[] = [];
     const bodyText = $("body").text().replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
 
     // Strategy 1: dedicated "geplante Termine" rows used on CGI detail pages
@@ -622,7 +632,19 @@ export class CAUSport extends BaseScraper {
       }
     }
 
-    return { dates: Array.from(datesSet), locations: Array.from(locationsSet) };
+    $(".bs_kursbeschreibung").each((_, element) => {
+      const germanText = $(element)
+        .find(".bslang_de")
+        .map((__, node) => $(node).text().replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim())
+        .get()
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+
+      if (germanText) notes.push(germanText);
+    });
+
+    return { dates: Array.from(datesSet), locations: Array.from(locationsSet), notes };
   }
 
   async parsePlannedDates(url: string): Promise<string[]> {
@@ -639,6 +661,7 @@ export class CAUSport extends BaseScraper {
     const $ = cheerio.load(html);
     const results: WorkoutCourse[] = [];
     const semester = this.parseSemester(html);
+    const categoryPageNotes = parseCategoryPageNotes(html);
 
     const pLimit = (await import("p-limit")).default;
     const detailLimit = pLimit(3);
@@ -651,7 +674,7 @@ export class CAUSport extends BaseScraper {
       if (!courseCode || !/^\d{4}-\d{2}$/.test(courseCode)) return;
 
       const outerSpan = row.find("td.bs_sdet > span").first();
-      const categoryPrefix = outerSpan.find(".dispmobile").text().trim();
+      const categoryPrefix = outerSpan.find(".dispmobile").text().trim().replace(/:\s*$/, "");
       const cloned = outerSpan.clone();
       cloned.find(".dispmobile").remove();
       const specificName = cloned.text().trim();
@@ -771,7 +794,7 @@ export class CAUSport extends BaseScraper {
 
         const durationPageMetadata = canFetchDurationPage
           ? await this.parseDurationPageMetadata(durationUrl!)
-          : { dates: [], locations: [] };
+          : { dates: [], locations: [], notes: [] };
         const plannedDates = durationPageMetadata.dates;
         const segments = this.mergeDatesIntoSegments(plannedDates);
         const finalStartDate = segments.length > 0 ? segments[0].start : startDate;
@@ -802,6 +825,13 @@ export class CAUSport extends BaseScraper {
             external: priceValues[2] ?? null,
             externalReduced: priceValues[3] ?? null,
           },
+          ...(categoryPageNotes.length > 0
+            ? {
+                description: {
+                  notes: categoryPageNotes,
+                },
+              }
+            : {}),
           bookingStatus,
           bookingUrl: bookingUrl ? `https://server.sportzentrum.uni-kiel.de${bookingUrl}` : "",
           url: pageUrl,

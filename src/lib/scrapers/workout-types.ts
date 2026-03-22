@@ -6,6 +6,7 @@ export interface WorkoutCourse {
   description?: {
     general?: string;
     price?: string;
+    notes?: string[];
   } | null;
   dayOfWeek: string;
   startTime: string;
@@ -35,6 +36,7 @@ export interface WorkoutCourse {
   bookingOpensOn?: string;
   bookingOpensAt?: string;
   plannedDates?: string[];
+  sessionCount?: number;
   segments?: Array<{ start: string; end: string; day: string }>;
   durationUrl?: string | null;
 }

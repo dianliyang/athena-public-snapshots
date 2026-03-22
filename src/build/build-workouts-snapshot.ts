@@ -10,10 +10,6 @@ type InputWorkout = {
   title: string;
   provider: string;
   category?: string | null;
-  description?: {
-    general?: string;
-    price?: string;
-  } | null;
   weekday?: string | null;
   timeLabel?: string | null;
   location?: string[] | null;
@@ -37,6 +33,7 @@ type InputWorkout = {
   bookingOpensOn?: string;
   bookingOpensAt?: string;
   plannedDates?: string[];
+  sessionCount?: number;
   durationUrl?: string | null;
 };
 
@@ -75,7 +72,6 @@ export function buildWorkoutsSnapshot(
       title: item.title,
       provider: item.provider,
       category: item.category ?? null,
-      description: item.description ?? null,
       schedule,
       location: item.location ?? null,
       url: item.url ?? null,
@@ -91,6 +87,7 @@ export function buildWorkoutsSnapshot(
       bookingOpensOn: item.bookingOpensOn,
       bookingOpensAt: item.bookingOpensAt,
       plannedDates: item.plannedDates,
+      sessionCount: item.sessionCount ?? item.plannedDates?.length,
       durationUrl: item.durationUrl || undefined,
     };
     detail[id] = detailRow;

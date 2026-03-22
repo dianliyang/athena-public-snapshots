@@ -34,9 +34,6 @@ describe("retrievePublishedWorkoutDetails", () => {
           title: "Spin Intervals",
           provider: "UniSport",
           category: "Cycling",
-          description: {
-            general: "Ride hard.",
-          },
           schedule: [],
           location: ["Studio A"],
           url: "https://example.com/spin",

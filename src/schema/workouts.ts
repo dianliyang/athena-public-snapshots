@@ -14,10 +14,6 @@ export type WorkoutDetailRecord = {
   title: string;
   provider: string;
   category: string | null;
-  description: {
-    general?: string;
-    price?: string;
-  } | null;
   schedule: Array<{
     day: string;
     time: string;
@@ -38,6 +34,7 @@ export type WorkoutDetailRecord = {
   bookingOpensOn?: string;
   bookingOpensAt?: string;
   plannedDates?: string[];
+  sessionCount?: number;
   durationUrl?: string;
 };
 
@@ -73,17 +70,6 @@ function isWorkoutPrice(value: unknown): value is WorkoutPrice | undefined {
   );
 }
 
-function isDescription(
-  value: unknown,
-): value is { general?: string; price?: string } | null {
-  return (
-    value === null ||
-    (isObject(value) &&
-      (value.general === undefined || typeof value.general === "string") &&
-      (value.price === undefined || typeof value.price === "string"))
-  );
-}
-
 function isWorkoutDetailRecord(value: unknown): value is WorkoutDetailRecord {
   if (!isObject(value)) return false;
 
@@ -93,10 +79,10 @@ function isWorkoutDetailRecord(value: unknown): value is WorkoutDetailRecord {
     typeof value.title === "string" &&
     typeof value.provider === "string" &&
     isNullableString(value.category) &&
-    isDescription(value.description) &&
     Array.isArray(value.schedule) &&
     isNullableStringArray(value.location) &&
     isNullableString(value.url) &&
+    (value.sessionCount === undefined || typeof value.sessionCount === "number") &&
     isWorkoutPrice(value.price)
   );
 }

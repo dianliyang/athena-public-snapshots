@@ -31,13 +31,15 @@ const input = [
 
 describe("buildWorkoutsSnapshot", () => {
   test("builds detail rows with normalized fields", () => {
-    const snapshot = buildWorkoutsSnapshot(input, "2026-03-15T12-00-00Z");
+    const snapshot = buildWorkoutsSnapshot([
+      {
+        ...input[0],
+        plannedDates: ["2026-03-17", "2026-03-24", "2026-03-31"],
+      },
+    ], "2026-03-15T12-00-00Z");
     expect(snapshot.detail["spin-01"]?.slug).toBe("spin-intervals");
     expect(snapshot.detail["spin-01"]?.location).toEqual(["Studio A", "Studio B"]);
-    expect(snapshot.detail["spin-01"]?.description).toEqual({
-      general: "High-intensity interval training on stationary bikes.",
-      price: "Single-session booking available.",
-    });
+    expect(snapshot.detail["spin-01"]).not.toHaveProperty("description");
     expect(snapshot.detail["spin-01"]?.price).toEqual({
       student: 12.9,
       staff: null,
@@ -47,6 +49,7 @@ describe("buildWorkoutsSnapshot", () => {
       children: 9.9,
       discount: 12.9,
     });
+    expect(snapshot.detail["spin-01"]?.sessionCount).toBe(3);
   });
 
   test("excludes non-public fields and emits detail-only manifest keys", () => {

@@ -64,10 +64,11 @@ describe("createLocalSnapshotBucket", () => {
       "zh-CN": "Bowling Games-zh-CN",
     });
     expect(JSON.parse(fs.readFileSync(metadataLocalePath, "utf8"))).toEqual({
-      "ricks-club-bowling": {
-        description: {
+      page: {},
+      entries: {
+        "ricks-club-bowling": {
           general: {
-            original: "Family-friendly bowling lanes",
+            digest: "29d463f788ca1238d915a6c244d473d2",
             de: "Family-friendly bowling lanes",
             en: "Family-friendly bowling lanes-en",
             ja: "Family-friendly bowling lanes-ja",
@@ -78,9 +79,9 @@ describe("createLocalSnapshotBucket", () => {
       },
     });
     expect(JSON.parse(fs.readFileSync(wikipediaLocalePath, "utf8"))).toEqual({
-      "ricks-club-bowling": {
+      "Bowling Games": {
         en: "",
-        de: "Bowling",
+        de: "Bowling Games",
         ja: "",
         ko: "",
         "zh-CN": "",
@@ -190,5 +191,79 @@ describe("createLocalSnapshotBucket", () => {
     expect(fs.existsSync(metadataLocalePath)).toBe(true);
     expect(fs.existsSync(path.join(rootDir, "workouts/locales/title", `${version}.json`))).toBe(false);
     expect(fs.existsSync(path.join(rootDir, "workouts/locales/category", `${version}.json`))).toBe(false);
+  });
+
+  test("rebuilds workout metadata from descriptions only when ignoreExisting is enabled", async () => {
+    const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "athena-local-bucket-"));
+    tempDirs.push(rootDir);
+    const bucket = createLocalSnapshotBucket(rootDir);
+    const version = "2026-03-22T12-05-37-455Z";
+    const metadataLocalePath = path.join(rootDir, "workouts/locales/metadata", `${version}.json`);
+
+    fs.mkdirSync(path.dirname(metadataLocalePath), { recursive: true });
+    fs.writeFileSync(
+      metadataLocalePath,
+      JSON.stringify(
+        {
+          page: {},
+          entries: {
+            "ricks-club-bowling": {
+              general: {
+                digest: "8e710522a620cdaee60d0d5b8e9bc130",
+                en: "Old text en",
+                de: "Old text",
+                ja: "Old text ja",
+                ko: "Old text ko",
+                "zh-CN": "Old text zh",
+              },
+            },
+          },
+        },
+        null,
+        2,
+      ),
+    );
+
+    const metadataLocaleKey = await syncWorkoutMetadataLocales(
+      [
+        {
+          id: "ricks-club-bowling",
+          description: {
+            general: "Family-friendly bowling lanes",
+            price: "EUR 10",
+          },
+        },
+      ],
+      version,
+      {
+        localeBucket: bucket,
+        ignoreExisting: true,
+      },
+    );
+
+    expect(metadataLocaleKey).toBe(`workouts/locales/metadata/${version}.json`);
+    expect(JSON.parse(fs.readFileSync(metadataLocalePath, "utf8"))).toEqual({
+      page: {},
+      entries: {
+        "ricks-club-bowling": {
+          general: {
+            digest: "29d463f788ca1238d915a6c244d473d2",
+            en: "",
+            de: "Family-friendly bowling lanes",
+            ja: "",
+            ko: "",
+            "zh-CN": "",
+          },
+          price: {
+            digest: "ddcab06b982a3377aedac187e0a69744",
+            en: "",
+            de: "EUR 10",
+            ja: "",
+            ko: "",
+            "zh-CN": "",
+          },
+        },
+      },
+    });
   });
 });

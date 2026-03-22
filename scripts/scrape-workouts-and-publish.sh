@@ -45,6 +45,6 @@ if [ "$MODE" = "refresh" ]; then
   R2_BUCKET_NAME="$BUCKET_NAME" npm run publish-workouts -- --mode=refresh "${SCRAPER_ARGS[@]}"
 else
   echo "[pipeline] Pulling published workout detail snapshot from R2"
-  R2_BUCKET_NAME="$BUCKET_NAME" npm run publish-workouts -- --mode=legacy
+  R2_BUCKET_NAME="$BUCKET_NAME" npm run publish-workouts -- --mode=legacy "${SCRAPER_ARGS[@]}"
 fi
 echo "[pipeline] Finished local workout pipeline"

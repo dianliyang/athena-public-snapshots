@@ -76,6 +76,24 @@ describe("scrape-workouts-and-publish.sh", () => {
     ]);
   });
 
+  test("passes through the translate flag", () => {
+    const { result, commands } = runScript(["refresh", "--target=ricks-club", "--translate"]);
+
+    expect(result.status).toBe(0);
+    expect(commands).toEqual([
+      "run publish-workouts -- --mode=refresh --target=ricks-club --translate",
+    ]);
+  });
+
+  test("passes through the local-only flag", () => {
+    const { result, commands } = runScript(["refresh", "--target=cau-sport", "--local-only"]);
+
+    expect(result.status).toBe(0);
+    expect(commands).toEqual([
+      "run publish-workouts -- --mode=refresh --target=cau-sport --local-only",
+    ]);
+  });
+
   test("legacy mode runs the unified publish runner", () => {
     const { result, commands } = runScript(["legacy"]);
 
