@@ -1,7 +1,6 @@
 import * as cheerio from "cheerio";
 import { BaseScraper } from "./BaseScraper";
-import type { WorkoutCourse } from "./cau-sport";
-import type { Course } from "./types";
+import type { WorkoutCourse } from "./workout-types";
 
 const RICKS_CLUB_URL = "https://www.ricksclub.de/";
 const PROVIDER = "Ricks Club";
@@ -84,15 +83,6 @@ function parseLeftPositions(html: string): Map<string, number> {
 export class RicksClub extends BaseScraper {
   constructor() {
     super("ricks-club");
-  }
-
-  links(): string[] {
-    return [RICKS_CLUB_URL];
-  }
-
-  async parser(_html: string): Promise<Course[]> {
-    void _html;
-    return [];
   }
 
   parseWorkouts(html: string, pageUrl: string): RicksClubWorkout[] {

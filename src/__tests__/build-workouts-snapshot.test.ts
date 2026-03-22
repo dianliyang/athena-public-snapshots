@@ -30,12 +30,8 @@ const input = [
 ];
 
 describe("buildWorkoutsSnapshot", () => {
-  test("builds browse and detail rows with slugs and search text", () => {
+  test("builds detail rows with normalized fields", () => {
     const snapshot = buildWorkoutsSnapshot(input, "2026-03-15T12-00-00Z");
-    expect(snapshot.browse[0]?.slug).toBe("spin-intervals");
-    expect(snapshot.browse[0]?.searchText).toContain("spin intervals");
-    expect(snapshot.browse[0]?.searchText).toContain("studio a");
-    expect(snapshot.browse[0]?.searchText).toContain("studio b");
     expect(snapshot.detail["spin-01"]?.slug).toBe("spin-intervals");
     expect(snapshot.detail["spin-01"]?.location).toEqual(["Studio A", "Studio B"]);
     expect(snapshot.detail["spin-01"]?.description).toEqual({
@@ -53,15 +49,13 @@ describe("buildWorkoutsSnapshot", () => {
     });
   });
 
-  test("excludes non-public fields and emits manifest keys", () => {
+  test("excludes non-public fields and emits detail-only manifest keys", () => {
     const snapshot = buildWorkoutsSnapshot(input, "2026-03-15T12-00-00Z");
-    expect(snapshot.browse[0]).not.toHaveProperty("internalOnly");
     expect(snapshot.detail["spin-01"]).not.toHaveProperty("internalOnly");
     expect(snapshot.detail["spin-01"]).not.toHaveProperty("bookingUrl");
     expect(snapshot.manifest).toEqual({
       version: "2026-03-15T12-00-00Z",
       generatedAt: "2026-03-15T12-00-00Z",
-      browseKey: "workouts/browse/2026-03-15T12-00-00Z.json",
       detailKey: "workouts/detail/2026-03-15T12-00-00Z.json",
       itemCount: 1,
     });

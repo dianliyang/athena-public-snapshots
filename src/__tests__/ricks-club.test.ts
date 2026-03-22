@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import type { WorkoutCourse } from "../lib/scrapers/cau-sport";
+import type { WorkoutCourse } from "../lib/scrapers/workout-types";
 import { RicksClub } from "../lib/scrapers/ricks-club";
 
 describe("RicksClub.parseWorkouts", () => {

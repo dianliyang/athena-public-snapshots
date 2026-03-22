@@ -22,7 +22,7 @@ describe("createLocalSnapshotBucket", () => {
     const version = "2026-03-17T10-00-00Z";
 
     const snapshots = await buildPublicSnapshots(
-      { version, includeCourses: false },
+      { version },
       {
         retrieveWorkouts: async () => [
           {
@@ -43,10 +43,12 @@ describe("createLocalSnapshotBucket", () => {
     const titleLocalePath = path.join(rootDir, "workouts/locales/title", `${version}.json`);
     const categoryLocalePath = path.join(rootDir, "workouts/locales/category", `${version}.json`);
     const metadataLocalePath = path.join(rootDir, "workouts/locales/metadata", `${version}.json`);
+    const wikipediaLocalePath = path.join(rootDir, "workouts/locales/wikipedia", `${version}.json`);
 
     expect(snapshots.workouts?.manifest.titleLocaleKey).toBe(`workouts/locales/title/${version}.json`);
     expect(snapshots.workouts?.manifest.categoryLocaleKey).toBe(`workouts/locales/category/${version}.json`);
     expect(snapshots.workouts?.manifest.metadataLocaleKey).toBe(`workouts/locales/metadata/${version}.json`);
+    expect(snapshots.workouts?.manifest.wikipediaLocaleKey).toBe(`workouts/locales/wikipedia/${version}.json`);
     expect(JSON.parse(fs.readFileSync(titleLocalePath, "utf8")).Bowling).toEqual({
       en: "Bowling-en",
       de: "Bowling",
@@ -73,6 +75,15 @@ describe("createLocalSnapshotBucket", () => {
             "zh-CN": "Family-friendly bowling lanes-zh-CN",
           },
         },
+      },
+    });
+    expect(JSON.parse(fs.readFileSync(wikipediaLocalePath, "utf8"))).toEqual({
+      "ricks-club-bowling": {
+        en: "",
+        de: "Bowling",
+        ja: "",
+        ko: "",
+        "zh-CN": "",
       },
     });
   });
@@ -111,7 +122,7 @@ describe("createLocalSnapshotBucket", () => {
     );
 
     await buildPublicSnapshots(
-      { version, includeCourses: false },
+      { version },
       {
         retrieveWorkouts: async () => [
           {

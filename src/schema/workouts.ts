@@ -1,12 +1,3 @@
-export type WorkoutBrowseRecord = {
-  id: string;
-  slug: string;
-  title: string;
-  provider: string;
-  category: string | null;
-  searchText: string;
-};
-
 export type WorkoutPrice = {
   student?: number | null;
   staff?: number | null;
@@ -50,7 +41,6 @@ export type WorkoutDetailRecord = {
   durationUrl?: string;
 };
 
-export type WorkoutsBrowseSnapshot = WorkoutBrowseRecord[];
 export type WorkoutsDetailSnapshot = Record<string, WorkoutDetailRecord>;
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -94,19 +84,6 @@ function isDescription(
   );
 }
 
-function isWorkoutBrowseRecord(value: unknown): value is WorkoutBrowseRecord {
-  if (!isObject(value)) return false;
-
-  return (
-    typeof value.id === "string" &&
-    typeof value.slug === "string" &&
-    typeof value.title === "string" &&
-    typeof value.provider === "string" &&
-    isNullableString(value.category) &&
-    typeof value.searchText === "string"
-  );
-}
-
 function isWorkoutDetailRecord(value: unknown): value is WorkoutDetailRecord {
   if (!isObject(value)) return false;
 
@@ -122,10 +99,6 @@ function isWorkoutDetailRecord(value: unknown): value is WorkoutDetailRecord {
     isNullableString(value.url) &&
     isWorkoutPrice(value.price)
   );
-}
-
-export function isWorkoutsBrowseSnapshot(value: unknown): value is WorkoutsBrowseSnapshot {
-  return Array.isArray(value) && value.every(isWorkoutBrowseRecord);
 }
 
 export function isWorkoutsDetailSnapshot(value: unknown): value is WorkoutsDetailSnapshot {

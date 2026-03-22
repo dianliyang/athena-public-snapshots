@@ -1,14 +1,9 @@
-import { MIT } from "../lib/scrapers/mit";
-import { Stanford } from "../lib/scrapers/stanford";
-import { CMU } from "../lib/scrapers/cmu";
-import { UCB } from "../lib/scrapers/ucb";
-import { retrieveWorkoutSourceBatches } from "../lib/scrapers/workout-sources";
+import { retrieveRawWorkouts } from "./retrieve-raw-workouts";
 import { buildCurrentWorkoutSemester } from "../lib/scrapers/utils/semester";
-import { buildCoursesSnapshot } from "../build/build-courses-snapshot";
 import { buildWorkoutsSnapshot } from "../build/build-workouts-snapshot";
 import type { R2BucketLike } from "../publish/publish-to-r2";
+import type { ManifestSnapshot } from "../schema";
 
-type CourseSnapshotSet = ReturnType<typeof buildCoursesSnapshot>;
 type WorkoutSnapshotSet = ReturnType<typeof buildWorkoutsSnapshot>;
 type LocaleEntry = Record<string, string>;
 type LocaleMap = Record<string, LocaleEntry>;
@@ -23,8 +18,18 @@ type LocaleBucketLike = R2BucketLike & {
   get?(key: string): Promise<{ text(): Promise<string> } | null>;
 };
 type TranslateTargetLocale = "en" | "ja" | "ko" | "zh-CN";
-type TranslateText = (text: string, target: TranslateTargetLocale) => Promise<string>;
+type TranslateText = (
+  text: string,
+  target: TranslateTargetLocale,
+) => Promise<string>;
 type TranslateFetch = typeof fetch;
+type WorkoutLocaleSeedKeys = Pick<
+  ManifestSnapshot,
+  | "titleLocaleKey"
+  | "categoryLocaleKey"
+  | "metadataLocaleKey"
+  | "wikipediaLocaleKey"
+>;
 
 function buildWorkoutTitleLocaleKey(version: string): string {
   return `workouts/locales/title/${version}.json`;
@@ -38,9 +43,12 @@ function buildWorkoutMetadataLocaleKey(version: string): string {
   return `workouts/locales/metadata/${version}.json`;
 }
 
+function buildWorkoutWikipediaLocaleKey(version: string): string {
+  return `workouts/locales/wikipedia/${version}.json`;
+}
+
 export type PublicSnapshots = {
   version: string;
-  courses?: CourseSnapshotSet;
   workouts?: WorkoutSnapshotSet;
 };
 
@@ -48,14 +56,13 @@ export type BuildPublicSnapshotsOptions = {
   version?: string;
   target?: string;
   workoutSemester?: string;
-  includeCourses?: boolean;
   includeWorkouts?: boolean;
 };
 
 export type BuildPublicSnapshotsDeps = {
-  retrieveCourses?: (target?: string) => Promise<any[]>;
   retrieveWorkouts?: (target?: string, semester?: string) => Promise<any[]>;
   localeBucket?: LocaleBucketLike;
+  seedWorkoutLocaleKeys?: Partial<WorkoutLocaleSeedKeys>;
   warn?: (message: string) => void;
   log?: (message: string) => void;
   translateText?: TranslateText;
@@ -70,20 +77,20 @@ export type SyncWorkoutMetadataLocalesDeps = {
   fetchImpl?: TranslateFetch;
 };
 
-const ALL_WORKOUT_SOURCES: Array<"cau-sport" | "urban-apes" | "ricks-club"> = ["cau-sport", "urban-apes", "ricks-club"];
-
 function normalizeWorkoutForSnapshot(workout: any) {
   return {
     ...workout,
-    id: workout.id ?? `${workout.source.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${workout.courseCode}`,
+    id:
+      workout.id ??
+      `${workout.source.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${workout.courseCode}`,
     title: workout.title,
     provider: workout.provider ?? workout.source,
     weekday: workout.weekday ?? workout.dayOfWeek,
-    timeLabel: workout.timeLabel ?? (
-      workout.startTime && workout.endTime
+    timeLabel:
+      workout.timeLabel ??
+      (workout.startTime && workout.endTime
         ? `${workout.startTime}-${workout.endTime}`
-        : workout.startTime || workout.endTime || undefined
-    ),
+        : workout.startTime || workout.endTime || undefined),
   };
 }
 
@@ -113,25 +120,34 @@ function buildGoogleTranslateText(
     );
 
     if (!response.ok) {
-      throw new Error(`Google Translate request failed: ${response.status} ${response.statusText}`);
+      throw new Error(
+        `Google Translate request failed: ${response.status} ${response.statusText}`,
+      );
     }
 
-    const payload = await response.json() as {
+    const payload = (await response.json()) as {
       data?: { translations?: Array<{ translatedText?: string }> };
     };
     const translated = payload.data?.translations?.[0]?.translatedText?.trim();
 
     if (!translated) {
-      throw new Error(`Google Translate returned no translation for target ${target}`);
+      throw new Error(
+        `Google Translate returned no translation for target ${target}`,
+      );
     }
 
     return translated;
   };
 }
 
-function buildLocaleTemplate(source: string, existingMap: LocaleMap): LocaleEntry {
+function buildLocaleTemplate(
+  source: string,
+  existingMap: LocaleMap,
+): LocaleEntry {
   const sample = Object.values(existingMap)[0];
-  const locales = sample ? Object.keys(sample) : ["en", "de", "ja", "ko", "zh-CN"];
+  const locales = sample
+    ? Object.keys(sample)
+    : ["en", "de", "ja", "ko", "zh-CN"];
 
   return Object.fromEntries(
     locales.map((locale) => [locale, locale === "de" ? source : ""]),
@@ -145,11 +161,14 @@ async function fillTranslatedLocales(
 ): Promise<LocaleEntry> {
   if (!translateText) return entry;
 
-  const targets = (Object.keys(entry) as TranslateTargetLocale[])
-    .filter((locale) => locale !== "de");
+  const targets = (Object.keys(entry) as TranslateTargetLocale[]).filter(
+    (locale) => locale !== "de",
+  );
 
   const translations = await Promise.all(
-    targets.map(async (target) => [target, await translateText(source, target)] as const),
+    targets.map(
+      async (target) => [target, await translateText(source, target)] as const,
+    ),
   );
 
   return {
@@ -158,13 +177,16 @@ async function fillTranslatedLocales(
   };
 }
 
-async function readLocaleMap(bucket: LocaleBucketLike, key: string): Promise<LocaleMap> {
+async function readLocaleMap(
+  bucket: LocaleBucketLike,
+  key: string,
+): Promise<LocaleMap> {
   const object = await bucket.get?.(key);
   if (!object) return {};
 
   const text = await object.text();
   const parsed = JSON.parse(text);
-  return parsed && typeof parsed === "object" ? parsed as LocaleMap : {};
+  return parsed && typeof parsed === "object" ? (parsed as LocaleMap) : {};
 }
 
 async function readWorkoutMetadataLocaleMap(
@@ -176,7 +198,33 @@ async function readWorkoutMetadataLocaleMap(
 
   const text = await object.text();
   const parsed = JSON.parse(text);
-  return parsed && typeof parsed === "object" ? parsed as WorkoutMetadataLocaleMap : {};
+  return parsed && typeof parsed === "object"
+    ? (parsed as WorkoutMetadataLocaleMap)
+    : {};
+}
+
+async function readSeededLocaleMap(
+  bucket: LocaleBucketLike,
+  primaryKey: string,
+  fallbackKey?: string,
+): Promise<LocaleMap> {
+  const object = await bucket.get?.(primaryKey);
+  if (object) return readLocaleMap(bucket, primaryKey);
+  if (fallbackKey && fallbackKey !== primaryKey)
+    return readLocaleMap(bucket, fallbackKey);
+  return {};
+}
+
+async function readSeededWorkoutMetadataLocaleMap(
+  bucket: LocaleBucketLike,
+  primaryKey: string,
+  fallbackKey?: string,
+): Promise<WorkoutMetadataLocaleMap> {
+  const object = await bucket.get?.(primaryKey);
+  if (object) return readWorkoutMetadataLocaleMap(bucket, primaryKey);
+  if (fallbackKey && fallbackKey !== primaryKey)
+    return readWorkoutMetadataLocaleMap(bucket, fallbackKey);
+  return {};
 }
 
 async function appendMissingLocaleEntries(
@@ -201,6 +249,25 @@ async function appendMissingLocaleEntries(
   return { map: nextMap, changed };
 }
 
+async function appendMissingWikipediaEntries(
+  map: LocaleMap,
+  workouts: any[],
+): Promise<{ map: LocaleMap; changed: boolean }> {
+  const nextMap: LocaleMap = { ...map };
+  let changed = false;
+
+  for (const workout of workouts) {
+    const workoutId = String(workout.id || "").trim();
+    if (!workoutId || nextMap[workoutId]) continue;
+
+    const seedTitle = String(workout.title || "").trim();
+    nextMap[workoutId] = buildLocaleTemplate(seedTitle, map);
+    changed = true;
+  }
+
+  return { map: nextMap, changed };
+}
+
 function normalizeLocalizedSourceText(value: unknown): string {
   return String(value || "").trim();
 }
@@ -218,7 +285,11 @@ async function buildDescriptionLocaleEntry(
   }
 
   const template = buildLocaleTemplate(source, {});
-  const translated = await fillTranslatedLocales(template, source, translateText);
+  const translated = await fillTranslatedLocales(
+    template,
+    source,
+    translateText,
+  );
 
   return {
     entry: {
@@ -234,9 +305,15 @@ async function syncWorkoutMetadataLocaleMap(
   bucket: LocaleBucketLike,
   version: string,
   translateText?: TranslateText,
+  seedKey?: string,
 ): Promise<void> {
   const metadataKey = buildWorkoutMetadataLocaleKey(version);
-  const existingMap = await readWorkoutMetadataLocaleMap(bucket, metadataKey);
+  const existingObject = await bucket.get?.(metadataKey);
+  const existingMap = await readSeededWorkoutMetadataLocaleMap(
+    bucket,
+    metadataKey,
+    seedKey,
+  );
   const nextMap: WorkoutMetadataLocaleMap = {};
   let changed = false;
 
@@ -248,18 +325,16 @@ async function syncWorkoutMetadataLocaleMap(
     if (!description || typeof description !== "object") continue;
 
     const nextDescriptionEntries: Record<string, DescriptionLocaleEntry> = {};
-    const existingDescriptionEntries = existingMap[workoutId]?.description || {};
+    const existingDescriptionEntries =
+      existingMap[workoutId]?.description || {};
 
     for (const [field, rawValue] of Object.entries(description)) {
       const source = normalizeLocalizedSourceText(rawValue);
       if (!source) continue;
 
       const existingEntry = existingDescriptionEntries[field];
-      const { entry, changed: entryChanged } = await buildDescriptionLocaleEntry(
-        source,
-        existingEntry,
-        translateText,
-      );
+      const { entry, changed: entryChanged } =
+        await buildDescriptionLocaleEntry(source, existingEntry, translateText);
       nextDescriptionEntries[field] = entry;
       changed = changed || entryChanged;
     }
@@ -269,12 +344,15 @@ async function syncWorkoutMetadataLocaleMap(
     nextMap[workoutId] = { description: nextDescriptionEntries };
 
     const existingWorkoutEntry = existingMap[workoutId];
-    if (JSON.stringify(existingWorkoutEntry || {}) !== JSON.stringify(nextMap[workoutId])) {
+    if (
+      JSON.stringify(existingWorkoutEntry || {}) !==
+      JSON.stringify(nextMap[workoutId])
+    ) {
       changed = true;
     }
   }
 
-  if (changed) {
+  if (changed || !existingObject) {
     await bucket.put(metadataKey, JSON.stringify(nextMap, null, 2));
   }
 }
@@ -284,13 +362,18 @@ export async function syncWorkoutMetadataLocales(
   version: string,
   deps: SyncWorkoutMetadataLocalesDeps,
 ): Promise<string> {
-  const translateText = deps.translateText || (
-    deps.translationApiKey
+  const translateText =
+    deps.translateText ||
+    (deps.translationApiKey
       ? buildGoogleTranslateText(deps.translationApiKey, deps.fetchImpl)
-      : undefined
-  );
+      : undefined);
 
-  await syncWorkoutMetadataLocaleMap(workouts, deps.localeBucket, version, translateText);
+  await syncWorkoutMetadataLocaleMap(
+    workouts,
+    deps.localeBucket,
+    version,
+    translateText,
+  );
   return buildWorkoutMetadataLocaleKey(version);
 }
 
@@ -299,84 +382,75 @@ async function syncWorkoutLocaleMaps(
   bucket: LocaleBucketLike,
   version: string,
   translateText?: TranslateText,
+  seedKeys: Partial<WorkoutLocaleSeedKeys> = {},
 ): Promise<void> {
   const titleKey = buildWorkoutTitleLocaleKey(version);
   const categoryKey = buildWorkoutCategoryLocaleKey(version);
-  const titles = Array.from(new Set(workouts.map((workout) => String(workout.title || "").trim()).filter(Boolean)));
-  const categories = Array.from(new Set(workouts.map((workout) => String(workout.category || "").trim()).filter(Boolean)));
+  const wikipediaKey = buildWorkoutWikipediaLocaleKey(version);
+  const titles = Array.from(
+    new Set(
+      workouts
+        .map((workout) => String(workout.title || "").trim())
+        .filter(Boolean),
+    ),
+  );
+  const categories = Array.from(
+    new Set(
+      workouts
+        .map((workout) => String(workout.category || "").trim())
+        .filter(Boolean),
+    ),
+  );
 
-  const [titleMap, categoryMap] = await Promise.all([
-    readLocaleMap(bucket, titleKey),
-    readLocaleMap(bucket, categoryKey),
+  const [titleObject, categoryObject, wikipediaObject] = await Promise.all([
+    bucket.get?.(titleKey),
+    bucket.get?.(categoryKey),
+    bucket.get?.(wikipediaKey),
   ]);
 
-  const [nextTitles, nextCategories] = await Promise.all([
+  const [titleMap, categoryMap, wikipediaMap] = await Promise.all([
+    readSeededLocaleMap(bucket, titleKey, seedKeys.titleLocaleKey),
+    readSeededLocaleMap(bucket, categoryKey, seedKeys.categoryLocaleKey),
+    readSeededLocaleMap(bucket, wikipediaKey, seedKeys.wikipediaLocaleKey),
+  ]);
+
+  const [nextTitles, nextCategories, nextWikipedia] = await Promise.all([
     appendMissingLocaleEntries(titleMap, titles, translateText),
     appendMissingLocaleEntries(categoryMap, categories, translateText),
+    appendMissingWikipediaEntries(wikipediaMap, workouts),
   ]);
 
-  if (nextTitles.changed) {
+  if (nextTitles.changed || !titleObject) {
     await bucket.put(titleKey, JSON.stringify(nextTitles.map, null, 2));
   }
 
-  if (nextCategories.changed) {
+  if (nextCategories.changed || !categoryObject) {
     await bucket.put(categoryKey, JSON.stringify(nextCategories.map, null, 2));
   }
 
-  await syncWorkoutMetadataLocaleMap(workouts, bucket, version, translateText);
-}
-
-async function defaultRetrieveCourses(target?: string): Promise<any[]> {
-  const allCourseScrapers = [new MIT(), new Stanford(), new CMU(), new UCB()];
-  const normalizedTarget = target?.toLowerCase();
-  const courseScrapers = normalizedTarget
-    ? allCourseScrapers.filter((scraper) => scraper.name.toLowerCase() === normalizedTarget)
-    : allCourseScrapers;
-
-  let allCourses: any[] = [];
-
-  for (const scraper of courseScrapers) {
-    try {
-      const items = await scraper.retrieve();
-      allCourses = allCourses.concat(items.map((item: any) => ({
-        id: `${item.university}-${item.courseCode}`,
-        title: item.title,
-        courseCode: item.courseCode,
-        university: item.university,
-        description: item.description,
-        credit: item.credit,
-        level: item.level,
-        department: item.department,
-        subdomain: item.subdomain,
-        category: item.category,
-        latestSemester: item.latestSemester,
-        url: item.url,
-        resources: item.resources,
-        instructors: item.instructors,
-      })));
-    } catch (error) {
-      console.error(`Failed to scrape ${scraper.name}:`, error);
-    }
+  if (nextWikipedia.changed || !wikipediaObject) {
+    await bucket.put(wikipediaKey, JSON.stringify(nextWikipedia.map, null, 2));
   }
 
-  return allCourses;
+  await syncWorkoutMetadataLocaleMap(
+    workouts,
+    bucket,
+    version,
+    translateText,
+    seedKeys.metadataLocaleKey,
+  );
 }
 
 async function defaultRetrieveWorkouts(
   target?: string,
   semester = buildCurrentWorkoutSemester(),
+  bucket?: LocaleBucketLike,
 ): Promise<any[]> {
-  const normalizedTarget = target?.toLowerCase();
-  const workoutSources = normalizedTarget
-    ? ALL_WORKOUT_SOURCES.filter((source) => source === normalizedTarget)
-    : ALL_WORKOUT_SOURCES;
-
-  if (workoutSources.length === 0) return [];
-
-  const retrieval = await retrieveWorkoutSourceBatches({ semester, sources: workoutSources });
-  const workouts = retrieval.batches.flatMap((batch) => batch.workouts);
-
-  return workouts.map(normalizeWorkoutForSnapshot);
+  const payload = await retrieveRawWorkouts(
+    { target, semester },
+    { cacheBucket: bucket },
+  );
+  return payload.workouts.map(normalizeWorkoutForSnapshot);
 }
 
 export async function buildPublicSnapshots(
@@ -385,32 +459,24 @@ export async function buildPublicSnapshots(
 ): Promise<PublicSnapshots> {
   const version = options.version || buildVersion();
   const target = options.target?.toLowerCase();
-  const includeCourses = options.includeCourses ?? true;
   const includeWorkouts = options.includeWorkouts ?? true;
-  const retrieveCourses = deps.retrieveCourses || defaultRetrieveCourses;
-  const retrieveWorkouts = deps.retrieveWorkouts || defaultRetrieveWorkouts;
+  const retrieveWorkouts =
+    deps.retrieveWorkouts ||
+    ((targetArg?: string, semesterArg?: string) =>
+      defaultRetrieveWorkouts(targetArg, semesterArg, deps.localeBucket));
   const warn = deps.warn || ((message: string) => console.warn(message));
   const log = deps.log || ((message: string) => console.log(message));
-  const translateText = deps.translateText || (
-    deps.translationApiKey
+  const translateText =
+    deps.translateText ||
+    (deps.translationApiKey
       ? buildGoogleTranslateText(deps.translationApiKey, deps.fetchImpl)
-      : undefined
+      : undefined);
+
+  log(
+    `Starting public snapshot build for version ${version}${target ? ` (target=${target})` : ""}`,
   );
 
-  log(`Starting public snapshot build for version ${version}${target ? ` (target=${target})` : ""}`);
-
-  let coursesInput: any[] = [];
   let workoutsInput: any[] = [];
-
-  if (includeCourses) {
-    try {
-      coursesInput = await retrieveCourses(target);
-      log(`Retrieved ${coursesInput.length} course records`);
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      warn(`Failed to retrieve courses: ${detail}`);
-    }
-  }
 
   if (includeWorkouts) {
     try {
@@ -425,10 +491,22 @@ export async function buildPublicSnapshots(
     }
   }
 
-  if (workoutsInput.length > 0 && deps.localeBucket?.put && deps.localeBucket?.get) {
+  if (
+    workoutsInput.length > 0 &&
+    deps.localeBucket?.put &&
+    deps.localeBucket?.get
+  ) {
     try {
-      log(`Syncing workout locale maps for ${workoutsInput.length} workout records`);
-      await syncWorkoutLocaleMaps(workoutsInput, deps.localeBucket, version, translateText);
+      log(
+        `Syncing workout locale maps for ${workoutsInput.length} workout records`,
+      );
+      await syncWorkoutLocaleMaps(
+        workoutsInput,
+        deps.localeBucket,
+        version,
+        translateText,
+        deps.seedWorkoutLocaleKeys,
+      );
       log("Finished syncing workout locale maps");
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
@@ -438,21 +516,26 @@ export async function buildPublicSnapshots(
 
   const result: PublicSnapshots = { version };
 
-  if (coursesInput.length > 0) {
-    result.courses = buildCoursesSnapshot(coursesInput, version);
-    log(`Built course snapshot with ${result.courses.manifest.itemCount} items`);
-  }
-
   if (workoutsInput.length > 0) {
-    result.workouts = buildWorkoutsSnapshot(workoutsInput.map(normalizeWorkoutForSnapshot), version);
-    result.workouts.manifest.titleLocaleKey = buildWorkoutTitleLocaleKey(version);
-    result.workouts.manifest.categoryLocaleKey = buildWorkoutCategoryLocaleKey(version);
-    result.workouts.manifest.metadataLocaleKey = buildWorkoutMetadataLocaleKey(version);
-    log(`Built workout snapshot with ${result.workouts.manifest.itemCount} items`);
+    result.workouts = buildWorkoutsSnapshot(
+      workoutsInput.map(normalizeWorkoutForSnapshot),
+      version,
+    );
+    result.workouts.manifest.titleLocaleKey =
+      buildWorkoutTitleLocaleKey(version);
+    result.workouts.manifest.categoryLocaleKey =
+      buildWorkoutCategoryLocaleKey(version);
+    result.workouts.manifest.metadataLocaleKey =
+      buildWorkoutMetadataLocaleKey(version);
+    result.workouts.manifest.wikipediaLocaleKey =
+      buildWorkoutWikipediaLocaleKey(version);
+    log(
+      `Built workout snapshot with ${result.workouts.manifest.itemCount} items`,
+    );
   }
 
   log(
-    `Finished public snapshot build for version ${version} with ${result.courses?.manifest.itemCount || 0} course items and ${result.workouts?.manifest.itemCount || 0} workout items`,
+    `Finished public snapshot build for version ${version} with ${result.workouts?.manifest.itemCount || 0} workout items`,
   );
 
   return result;

@@ -12,7 +12,10 @@ export type R2BucketLike = {
 
 const SNAPSHOT_RETENTION_COUNT = 3;
 
-async function listAllKeys(bucket: R2BucketLike, prefix: string): Promise<string[]> {
+async function listAllKeys(
+  bucket: R2BucketLike,
+  prefix: string,
+): Promise<string[]> {
   if (!bucket.list) return [];
 
   const keys: string[] = [];
@@ -28,9 +31,7 @@ async function listAllKeys(bucket: R2BucketLike, prefix: string): Promise<string
 }
 
 function selectKeysToDelete(keys: string[], keepCount: number): string[] {
-  return [...keys]
-    .sort((a, b) => b.localeCompare(a))
-    .slice(keepCount);
+  return [...keys].sort((a, b) => b.localeCompare(a)).slice(keepCount);
 }
 
 async function pruneOldSnapshots(
@@ -54,22 +55,27 @@ export async function publishSnapshotSet(
   input: {
     baseKey: string;
     manifest: ManifestSnapshot;
-    browse: unknown;
     detail: unknown;
   },
 ): Promise<void> {
-  await bucket.put(input.manifest.browseKey, JSON.stringify(input.browse, null, 2));
-  await bucket.put(input.manifest.detailKey, JSON.stringify(input.detail, null, 2));
-  await bucket.put(`${input.baseKey}/manifest.json`, JSON.stringify(input.manifest, null, 2));
+  await bucket.put(
+    input.manifest.detailKey,
+    JSON.stringify(input.detail, null, 2),
+  );
+  await bucket.put(
+    `${input.baseKey}/manifest.json`,
+    JSON.stringify(input.manifest, null, 2),
+  );
 
   if (input.baseKey === "workouts") {
     await pruneOldSnapshots(
       bucket,
       [
-        `${input.baseKey}/browse/`,
         `${input.baseKey}/detail/`,
         `${input.baseKey}/locales/title/`,
         `${input.baseKey}/locales/category/`,
+        `${input.baseKey}/locales/metadata/`,
+        `${input.baseKey}/locales/wikipedia/`,
       ],
       SNAPSHOT_RETENTION_COUNT,
     );

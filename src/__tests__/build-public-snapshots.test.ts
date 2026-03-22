@@ -2,37 +2,6 @@ import { describe, expect, test, vi } from "vitest";
 import { buildPublicSnapshots } from "../pipeline/build-public-snapshots";
 
 describe("buildPublicSnapshots", () => {
-  test("skips course retrieval when courses are disabled", async () => {
-    const retrieveCourses = vi.fn(async () => [
-      {
-        id: "mit-6.006",
-        title: "Introduction to Algorithms",
-        courseCode: "6.006",
-        university: "MIT",
-        description: "Algorithms.",
-      },
-    ]);
-
-    const snapshots = await buildPublicSnapshots(
-      { version: "2026-03-17T10-00-00Z", includeCourses: false },
-      {
-        retrieveCourses,
-        retrieveWorkouts: async () => [
-          {
-            id: "cau-1234-01",
-            title: "Yoga",
-            provider: "CAU Kiel Sportzentrum",
-            category: "Mind & Body",
-          },
-        ],
-      },
-    );
-
-    expect(retrieveCourses).not.toHaveBeenCalled();
-    expect(snapshots.courses).toBeUndefined();
-    expect(snapshots.workouts?.detail["cau-1234-01"]?.title).toBe("Yoga");
-  });
-
   test("skips workout retrieval when workouts are disabled", async () => {
     const retrieveWorkouts = vi.fn(async () => [
       {
@@ -45,22 +14,10 @@ describe("buildPublicSnapshots", () => {
 
     const snapshots = await buildPublicSnapshots(
       { version: "2026-03-17T10-00-00Z", includeWorkouts: false },
-      {
-        retrieveCourses: async () => [
-          {
-            id: "mit-6.006",
-            title: "Introduction to Algorithms",
-            courseCode: "6.006",
-            university: "MIT",
-            description: "Algorithms.",
-          },
-        ],
-        retrieveWorkouts,
-      },
+      { retrieveWorkouts },
     );
 
     expect(retrieveWorkouts).not.toHaveBeenCalled();
-    expect(snapshots.courses?.detail["mit-6.006"]?.title).toBe("Introduction to Algorithms");
     expect(snapshots.workouts).toBeUndefined();
   });
 
@@ -71,10 +28,8 @@ describe("buildPublicSnapshots", () => {
 
     try {
       await buildPublicSnapshots(
-        { version: "2026-03-17T10-00-00Z", includeCourses: false },
-        {
-          retrieveWorkouts,
-        },
+        { version: "2026-03-17T10-00-00Z" },
+        { retrieveWorkouts },
       );
     } finally {
       vi.useRealTimers();
@@ -83,19 +38,10 @@ describe("buildPublicSnapshots", () => {
     expect(retrieveWorkouts).toHaveBeenCalledWith(undefined, "su26");
   });
 
-  test("builds course and workout snapshots in memory", async () => {
+  test("builds workout detail snapshots in memory", async () => {
     const snapshots = await buildPublicSnapshots(
       { version: "2026-03-17T10-00-00Z" },
       {
-        retrieveCourses: async () => [
-          {
-            id: "mit-6.006",
-            title: "Introduction to Algorithms",
-            courseCode: "6.006",
-            university: "MIT",
-            description: "Algorithms.",
-          },
-        ],
         retrieveWorkouts: async () => [
           {
             id: "cau-1234-01",
@@ -109,7 +55,7 @@ describe("buildPublicSnapshots", () => {
     );
 
     expect(snapshots.version).toBe("2026-03-17T10-00-00Z");
-    expect(snapshots.courses?.manifest.browseKey).toBe("courses/browse/2026-03-17T10-00-00Z.json");
+    expect(snapshots.workouts?.manifest.detailKey).toBe("workouts/detail/2026-03-17T10-00-00Z.json");
     expect(snapshots.workouts?.detail["cau-1234-01"]?.location).toEqual(["Hall 1", "Hall 2"]);
   });
 
@@ -117,7 +63,6 @@ describe("buildPublicSnapshots", () => {
     const snapshots = await buildPublicSnapshots(
       { version: "2026-03-17T10-00-00Z" },
       {
-        retrieveCourses: async () => [],
         retrieveWorkouts: async () => [
           {
             id: "urban-apes-kiel-mon-fri",
@@ -145,10 +90,6 @@ describe("buildPublicSnapshots", () => {
         location: "Grasweg 40, 24118 Kiel",
       },
     ]);
-    expect(snapshots.workouts?.detail["urban-apes-kiel-mon-fri"]?.description).toEqual({
-      general: "No previous experience necessary",
-      price: "All prices are in euros and include VAT.",
-    });
   });
 
   test("appends missing workout titles and categories to locale json in r2 with translated locales", async () => {
@@ -190,7 +131,6 @@ describe("buildPublicSnapshots", () => {
     await buildPublicSnapshots(
       { version },
       {
-        retrieveCourses: async () => [],
         retrieveWorkouts: async () => [
           {
             id: "ricks-club-bowling",
@@ -204,17 +144,14 @@ describe("buildPublicSnapshots", () => {
       },
     );
 
-    const titleJson = JSON.parse(writes.get(titleKey) || "{}");
-    const categoryJson = JSON.parse(writes.get(categoryKey) || "{}");
-
-    expect(titleJson.Bowling).toEqual({
+    expect(JSON.parse(writes.get(titleKey) || "{}").Bowling).toEqual({
       en: "Bowling-en",
       de: "Bowling",
       ja: "Bowling-ja",
       ko: "Bowling-ko",
       "zh-CN": "Bowling-zh-CN",
     });
-    expect(categoryJson["Bowling Games"]).toEqual({
+    expect(JSON.parse(writes.get(categoryKey) || "{}")["Bowling Games"]).toEqual({
       en: "Bowling Games-en",
       de: "Bowling Games",
       ja: "Bowling Games-ja",
@@ -223,84 +160,29 @@ describe("buildPublicSnapshots", () => {
     });
   });
 
-  test("writes workout description metadata locales and reuses translations when original text is unchanged", async () => {
+  test("seeds new locale files from the previous manifest locale keys before appending", async () => {
     const writes = new Map<string, string>();
-    const version = "2026-03-17T10-00-00Z";
-    const metadataKey = `workouts/locales/metadata/${version}.json`;
-    const translateText = vi.fn(async (text: string, target: string) => `${text}-${target}`);
+    const version = "2026-03-21T10-00-00Z";
+    const previousCategoryKey = "workouts/locales/category/2026-03-20T10-00-00Z.json";
+    const nextCategoryKey = `workouts/locales/category/${version}.json`;
 
     const bucket = {
       async get(key: string) {
         const objects: Record<string, string> = {
-          [metadataKey]: JSON.stringify({
-            "urban-apes-kiel-mon-fri": {
-              description: {
-                general: {
-                  original: "No previous experience necessary",
-                  en: "No previous experience necessary-en-old",
-                  ja: "No previous experience necessary-ja-old",
-                  ko: "No previous experience necessary-ko-old",
-                  "zh-CN": "No previous experience necessary-zh-CN-old",
-                },
-              },
+          [previousCategoryKey]: JSON.stringify({
+            "Bowling Games": {
+              en: "Bowling Games-en",
+              de: "Bowling Games",
+              ja: "Bowling Games-ja",
+              ko: "Bowling Games-ko",
+              "zh-CN": "Bowling Games-zh-CN",
             },
-          }),
-        };
-
-        const value = objects[key];
-        return value ? { text: async () => value } : null;
-      },
-      async put(key: string, value: string) {
-        writes.set(key, value);
-      },
-    };
-
-    const snapshots = await buildPublicSnapshots(
-      { version, includeCourses: false },
-      {
-        retrieveWorkouts: async () => [
-          {
-            id: "urban-apes-kiel-mon-fri",
-            title: "Bouldering",
-            provider: "Urban Apes",
-            category: "Climbing",
-            description: {
-              general: "No previous experience necessary",
-            },
-          },
-        ],
-        localeBucket: bucket,
-        translateText,
-      },
-    );
-
-    expect(snapshots.workouts?.manifest.metadataLocaleKey).toBe(metadataKey);
-    expect(
-      translateText.mock.calls.some(([text]) => text === "No previous experience necessary"),
-    ).toBe(false);
-    expect(writes.has(metadataKey)).toBe(false);
-  });
-
-  test("retranslates workout description metadata when original text changed and skips empty description fields", async () => {
-    const writes = new Map<string, string>();
-    const version = "2026-03-17T10-00-00Z";
-    const metadataKey = `workouts/locales/metadata/${version}.json`;
-    const translateText = vi.fn(async (text: string, target: string) => `${text}-${target}`);
-
-    const bucket = {
-      async get(key: string) {
-        const objects: Record<string, string> = {
-          [metadataKey]: JSON.stringify({
-            "urban-apes-kiel-mon-fri": {
-              description: {
-                general: {
-                  original: "Old text",
-                  en: "Old text-en",
-                  ja: "Old text-ja",
-                  ko: "Old text-ko",
-                  "zh-CN": "Old text-zh-CN",
-                },
-              },
+            "Climbing Session": {
+              en: "Climbing Session-en",
+              de: "Climbing Session",
+              ja: "Climbing Session-ja",
+              ko: "Climbing Session-ko",
+              "zh-CN": "Climbing Session-zh-CN",
             },
           }),
         };
@@ -314,73 +196,8 @@ describe("buildPublicSnapshots", () => {
     };
 
     await buildPublicSnapshots(
-      { version, includeCourses: false },
-      {
-        retrieveWorkouts: async () => [
-          {
-            id: "urban-apes-kiel-mon-fri",
-            title: "Bouldering",
-            provider: "Urban Apes",
-            category: "Climbing",
-            description: {
-              general: "Updated text",
-              price: "   ",
-            },
-          },
-        ],
-        localeBucket: bucket,
-        translateText,
-      },
-    );
-
-    const updatedTextCalls = translateText.mock.calls.filter(([text]) => text === "Updated text");
-    expect(updatedTextCalls).toHaveLength(4);
-    expect(updatedTextCalls).toContainEqual(["Updated text", "en"]);
-    expect(updatedTextCalls).toContainEqual(["Updated text", "ja"]);
-    expect(updatedTextCalls).toContainEqual(["Updated text", "ko"]);
-    expect(updatedTextCalls).toContainEqual(["Updated text", "zh-CN"]);
-
-    expect(JSON.parse(writes.get(metadataKey) || "{}")).toEqual({
-      "urban-apes-kiel-mon-fri": {
-        description: {
-          general: {
-            original: "Updated text",
-            de: "Updated text",
-            en: "Updated text-en",
-            ja: "Updated text-ja",
-            ko: "Updated text-ko",
-            "zh-CN": "Updated text-zh-CN",
-          },
-        },
-      },
-    });
-  });
-
-  test("uses the Google Translate API request shape when translationApiKey is provided", async () => {
-    const writes = new Map<string, string>();
-    const requests: Array<{
-      url: string;
-      method?: string;
-      headers?: HeadersInit;
-      bodyText: string;
-    }> = [];
-    const version = "2026-03-17T10-00-00Z";
-    const titleKey = `workouts/locales/title/${version}.json`;
-    const categoryKey = `workouts/locales/category/${version}.json`;
-
-    const bucket = {
-      async get() {
-        return null;
-      },
-      async put(key: string, value: string) {
-        writes.set(key, value);
-      },
-    };
-
-    await buildPublicSnapshots(
       { version },
       {
-        retrieveCourses: async () => [],
         retrieveWorkouts: async () => [
           {
             id: "ricks-club-bowling",
@@ -390,180 +207,20 @@ describe("buildPublicSnapshots", () => {
           },
         ],
         localeBucket: bucket,
-        translationApiKey: "test-api-key",
-        fetchImpl: async (input, init) => {
-          requests.push({
-            url: String(input),
-            method: init?.method,
-            headers: init?.headers,
-            bodyText: init?.body instanceof URLSearchParams ? init.body.toString() : String(init?.body || ""),
-          });
-
-          const body = init?.body instanceof URLSearchParams ? init.body : new URLSearchParams(String(init?.body || ""));
-          const target = body.get("target") || "";
-          const text = body.get("q") || "";
-
-          return new Response(JSON.stringify({
-            data: {
-              translations: [{ translatedText: `${text}-${target}` }],
-            },
-          }), {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          });
+        translateText: async (text, target) => `${text}-${target}`,
+        seedWorkoutLocaleKeys: {
+          categoryLocaleKey: previousCategoryKey,
         },
       },
     );
 
-    expect(requests).toHaveLength(8);
-    expect(requests[0]?.url).toBe("https://translation.googleapis.com/language/translate/v2?key=test-api-key");
-    expect(requests[0]?.method).toBe("POST");
-    expect(requests[0]?.bodyText).toContain("q=Bowling");
-    expect(requests[0]?.bodyText).toContain("source=de");
-    expect(requests[0]?.bodyText).toContain("format=text");
-    expect(requests.map((request) => request.bodyText)).toContain("q=Bowling&source=de&target=en&format=text");
-    expect(requests.map((request) => request.bodyText)).toContain("q=Bowling+Games&source=de&target=zh-CN&format=text");
-
-    const titleJson = JSON.parse(writes.get(titleKey) || "{}");
-    const categoryJson = JSON.parse(writes.get(categoryKey) || "{}");
-
-    expect(titleJson.Bowling).toEqual({
-      en: "Bowling-en",
-      de: "Bowling",
-      ja: "Bowling-ja",
-      ko: "Bowling-ko",
-      "zh-CN": "Bowling-zh-CN",
+    expect(JSON.parse(writes.get(nextCategoryKey) || "{}")).toMatchObject({
+      "Bowling Games": {
+        de: "Bowling Games",
+      },
+      "Climbing Session": {
+        de: "Climbing Session",
+      },
     });
-    expect(categoryJson["Bowling Games"]).toEqual({
-      en: "Bowling Games-en",
-      de: "Bowling Games",
-      ja: "Bowling Games-ja",
-      ko: "Bowling Games-ko",
-      "zh-CN": "Bowling Games-zh-CN",
-    });
-  });
-
-  test("adds versioned locale keys to the workouts manifest", async () => {
-    const version = "2026-03-17T10-00-00Z";
-
-    const snapshots = await buildPublicSnapshots(
-      { version },
-      {
-        retrieveCourses: async () => [],
-        retrieveWorkouts: async () => [
-          {
-            id: "ricks-club-bowling",
-            title: "Bowling",
-            provider: "Ricks Club",
-            category: "Bowling Games",
-          },
-        ],
-      },
-    );
-
-    expect(snapshots.workouts?.manifest.titleLocaleKey).toBe(`workouts/locales/title/${version}.json`);
-    expect(snapshots.workouts?.manifest.categoryLocaleKey).toBe(`workouts/locales/category/${version}.json`);
-    expect(snapshots.workouts?.manifest.metadataLocaleKey).toBe(`workouts/locales/metadata/${version}.json`);
-  });
-
-  test("warns and continues when locale sync fails", async () => {
-    const warnings: string[] = [];
-
-    const snapshots = await buildPublicSnapshots(
-      { version: "2026-03-17T10-00-00Z" },
-      {
-        retrieveCourses: async () => [],
-        retrieveWorkouts: async () => [
-          {
-            id: "cau-1234-01",
-            title: "Yoga",
-            provider: "CAU Kiel Sportzentrum",
-            category: "Mind & Body",
-          },
-        ],
-        localeBucket: {
-          async get() {
-            throw new Error("r2 unavailable");
-          },
-          async put() {
-            throw new Error("should not be called");
-          },
-        },
-        warn: (message) => warnings.push(message),
-      },
-    );
-
-    expect(snapshots.workouts?.detail["cau-1234-01"]?.title).toBe("Yoga");
-    expect(warnings).toEqual([
-      expect.stringContaining("Failed to sync workout locale maps"),
-    ]);
-  });
-
-  test("warns and still returns course snapshots when workout retrieval fails", async () => {
-    const warnings: string[] = [];
-
-    const snapshots = await buildPublicSnapshots(
-      { version: "2026-03-17T10-00-00Z" },
-      {
-        retrieveCourses: async () => [
-          {
-            id: "mit-6.006",
-            title: "Introduction to Algorithms",
-            courseCode: "6.006",
-            university: "MIT",
-            description: "Algorithms.",
-          },
-        ],
-        retrieveWorkouts: async () => {
-          throw new Error("workout source unavailable");
-        },
-        warn: (message) => warnings.push(message),
-      },
-    );
-
-    expect(snapshots.courses?.detail["mit-6.006"]?.title).toBe("Introduction to Algorithms");
-    expect(snapshots.workouts).toBeUndefined();
-    expect(warnings).toEqual([
-      expect.stringContaining("Failed to retrieve workouts"),
-    ]);
-  });
-
-  test("logs build stages and item counts", async () => {
-    const logs: string[] = [];
-
-    const snapshots = await buildPublicSnapshots(
-      { version: "2026-03-17T10-00-00Z" },
-      {
-        retrieveCourses: async () => [
-          {
-            id: "mit-6.006",
-            title: "Introduction to Algorithms",
-            courseCode: "6.006",
-            university: "MIT",
-            description: "Algorithms.",
-          },
-        ],
-        retrieveWorkouts: async () => [
-          {
-            id: "cau-1234-01",
-            title: "Yoga",
-            provider: "CAU Kiel Sportzentrum",
-            category: "Mind & Body",
-          },
-        ],
-        log: (message) => logs.push(message),
-      },
-    );
-
-    expect(snapshots.courses?.manifest.itemCount).toBe(1);
-    expect(snapshots.workouts?.manifest.itemCount).toBe(1);
-    expect(logs).toEqual([
-      expect.stringContaining("Starting public snapshot build"),
-      expect.stringContaining("Retrieved 1 course records"),
-      expect.stringContaining("Retrieved 1 workout records"),
-      expect.stringContaining("Built course snapshot with 1 items"),
-      expect.stringContaining("Built workout snapshot with 1 items"),
-      expect.stringContaining("Finished public snapshot build"),
-    ]);
   });
 });

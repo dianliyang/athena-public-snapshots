@@ -1,9 +1,7 @@
 import type {
   ManifestSnapshot,
-  WorkoutBrowseRecord,
   WorkoutDetailRecord,
   WorkoutPrice,
-  WorkoutsBrowseSnapshot,
   WorkoutsDetailSnapshot,
 } from "../schema";
 
@@ -50,48 +48,18 @@ function slugify(value: string): string {
     .replace(/-{2,}/g, "-");
 }
 
-function buildSearchText(parts: Array<string | number | null | undefined>): string {
-  return parts
-    .map((part) => String(part || "").trim().toLowerCase())
-    .filter(Boolean)
-    .join(" ");
-}
-
-function flattenSearchPart(part: string | string[] | number | null | undefined): Array<string | number> {
-  if (Array.isArray(part)) return part.filter(Boolean);
-  if (part === null || part === undefined) return [];
-  return [part];
-}
-
 export function buildWorkoutsSnapshot(
   items: InputWorkout[],
   version: string,
 ): {
   manifest: ManifestSnapshot;
-  browse: WorkoutsBrowseSnapshot;
   detail: WorkoutsDetailSnapshot;
 } {
-  const browse: WorkoutsBrowseSnapshot = [];
   const detail: WorkoutsDetailSnapshot = {};
 
   for (const item of items) {
     const id = String(item.id);
     const slug = slugify(item.title);
-
-    const browseRow: WorkoutBrowseRecord = {
-      id,
-      slug,
-      title: item.title,
-      provider: item.provider,
-      category: item.category ?? null,
-      searchText: buildSearchText([
-        item.title,
-        item.provider,
-        item.category,
-        item.weekday,
-        ...flattenSearchPart(item.location),
-      ]),
-    };
 
     const schedule = item.schedule || (item.weekday && item.timeLabel
       ? [{ day: item.weekday, time: item.timeLabel, location: item.location?.[0] || "" }]
@@ -125,8 +93,6 @@ export function buildWorkoutsSnapshot(
       plannedDates: item.plannedDates,
       durationUrl: item.durationUrl || undefined,
     };
-
-    browse.push(browseRow);
     detail[id] = detailRow;
   }
 
@@ -134,11 +100,9 @@ export function buildWorkoutsSnapshot(
     manifest: {
       version,
       generatedAt: version,
-      browseKey: `workouts/browse/${version}.json`,
       detailKey: `workouts/detail/${version}.json`,
-      itemCount: browse.length,
+      itemCount: Object.keys(detail).length,
     },
-    browse,
     detail,
   };
 }

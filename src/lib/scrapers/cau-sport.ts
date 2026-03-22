@@ -1,7 +1,7 @@
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 import { BaseScraper } from "./BaseScraper";
-import { Course } from "./types";
+import type { WorkoutCourse } from "./workout-types";
 import { buildCurrentWorkoutSemester } from "./utils/semester";
 
 const BOOKING_STATUS_MAP: Record<string, string> = {
@@ -131,49 +131,6 @@ function parseBookingAvailability(
   };
 }
 
-export interface WorkoutCourse {
-  source: string;
-  courseCode: string;
-  category: string;
-  title: string;
-  description?: {
-    general?: string;
-    price?: string;
-  } | null;
-  dayOfWeek: string;
-  startTime: string;
-  endTime: string;
-  location: string[];
-  instructor: string;
-  startDate: string;
-  endDate: string;
-  price: {
-    student: number | null;
-    staff: number | null;
-    external: number | null;
-    externalReduced: number | null;
-  };
-  bookingStatus: string;
-  bookingUrl: string;
-  url: string;
-  semester: string;
-  duration?: string;
-  
-  // Flattened details
-  schedule?: Array<{
-    day: string;
-    time: string;
-    location: string;
-  }>;
-  isEntgeltfrei?: boolean;
-  bookingLabel?: string;
-  bookingOpensOn?: string;
-  bookingOpensAt?: string;
-  plannedDates?: string[];
-  segments?: Array<{ start: string; end: string; day: string }>;
-  durationUrl?: string | null;
-}
-
 export type CauPageCache = {
   etag?: string;
   lastModified?: string;
@@ -190,6 +147,10 @@ export type CauIndexCache = CauPageCache & {
 export type CauCacheState = {
   index?: CauIndexCache;
   pages?: Record<string, CauPageCache>;
+};
+
+type DetailPageBudget = {
+  remaining: number;
 };
 
 type CauIndexProbeResult = {
@@ -357,10 +318,6 @@ export class CAUSport extends BaseScraper {
     });
 
     return [...new Set(categoryLinks)];
-  }
-
-  parser(): Course[] {
-    return [];
   }
 
   parseSemester(html: string): string {
@@ -672,7 +629,13 @@ export class CAUSport extends BaseScraper {
     return (await this.parseDurationPageMetadata(url)).dates;
   }
 
-  async parseWorkouts(html: string, pageUrl: string): Promise<WorkoutCourse[]> {
+  async parseWorkouts(
+    html: string,
+    pageUrl: string,
+    options: {
+      detailPageBudget?: DetailPageBudget;
+    } = {},
+  ): Promise<WorkoutCourse[]> {
     const $ = cheerio.load(html);
     const results: WorkoutCourse[] = [];
     const semester = this.parseSemester(html);
@@ -801,8 +764,13 @@ export class CAUSport extends BaseScraper {
       const bookingUrl = bookingTd.find("a[href]").attr("href") || "";
 
       rowPromises.push(detailLimit(async () => {
-        const durationPageMetadata = durationUrl
-          ? await this.parseDurationPageMetadata(durationUrl)
+        const canFetchDurationPage = durationUrl && (options.detailPageBudget?.remaining ?? Number.POSITIVE_INFINITY) > 0;
+        if (canFetchDurationPage && options.detailPageBudget) {
+          options.detailPageBudget.remaining -= 1;
+        }
+
+        const durationPageMetadata = canFetchDurationPage
+          ? await this.parseDurationPageMetadata(durationUrl!)
           : { dates: [], locations: [] };
         const plannedDates = durationPageMetadata.dates;
         const segments = this.mergeDatesIntoSegments(plannedDates);
@@ -860,9 +828,11 @@ export class CAUSport extends BaseScraper {
   async retrieveWorkoutBatch({
     categoryName,
     cacheState,
+    detailPageBudget,
   }: {
     categoryName?: string;
     cacheState?: CauCacheState;
+    detailPageBudget?: number;
   }): Promise<{
     batches: Array<{ pageUrl: string; workouts: WorkoutCourse[] }>;
     skipped: boolean;
@@ -874,6 +844,9 @@ export class CAUSport extends BaseScraper {
       ? { ...cacheState.index }
       : undefined;
     const batches: Array<{ pageUrl: string; workouts: WorkoutCourse[] }> = [];
+    const sharedDetailPageBudget: DetailPageBudget = {
+      remaining: detailPageBudget ?? Number.POSITIVE_INFINITY,
+    };
 
     if (!categoryName) {
       const probe = await this.probeIndexPage(cacheState?.index);
@@ -933,7 +906,9 @@ export class CAUSport extends BaseScraper {
 
           const html = result.html;
           if (html) {
-            const workouts = await this.parseWorkouts(html, link);
+            const workouts = await this.parseWorkouts(html, link, {
+              detailPageBudget: sharedDetailPageBudget,
+            });
             batches.push({ pageUrl: link, workouts });
           }
         })
@@ -952,9 +927,5 @@ export class CAUSport extends BaseScraper {
         },
       },
     };
-  }
-
-  async retrieve(): Promise<Course[]> {
-    return (await this.retrieveWorkouts()) as unknown as Course[];
   }
 }

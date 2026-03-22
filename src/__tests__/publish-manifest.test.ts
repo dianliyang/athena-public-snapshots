@@ -23,37 +23,28 @@ class FakeBucket implements R2BucketLike {
 }
 
 describe("publishSnapshotSet", () => {
-  test("publishes browse/detail payloads before manifest", async () => {
+  test("publishes workout detail payload before manifest", async () => {
     const bucket = new FakeBucket();
 
     await publishSnapshotSet(bucket, {
-      baseKey: "courses",
+      baseKey: "workouts",
       manifest: {
         version: "2026-03-15T12-00-00Z",
         generatedAt: "2026-03-15T12-00-00Z",
-        browseKey: "courses/browse/2026-03-15T12-00-00Z.json",
-        detailKey: "courses/detail/2026-03-15T12-00-00Z.json",
+        detailKey: "workouts/detail/2026-03-15T12-00-00Z.json",
         itemCount: 1,
       },
-      browse: [{ id: "1" }],
       detail: { "1": { id: "1" } },
     });
 
     expect(bucket.writes.map((entry) => entry.key)).toEqual([
-      "courses/browse/2026-03-15T12-00-00Z.json",
-      "courses/detail/2026-03-15T12-00-00Z.json",
-      "courses/manifest.json",
+      "workouts/detail/2026-03-15T12-00-00Z.json",
+      "workouts/manifest.json",
     ]);
   });
 
   test("keeps only the latest 3 workout snapshot versions and preserves locale keys in the manifest", async () => {
     const bucket = new FakeBucket();
-    bucket.listResponses.set("workouts/browse/", [
-      "workouts/browse/2026-03-12T12-00-00Z.json",
-      "workouts/browse/2026-03-13T12-00-00Z.json",
-      "workouts/browse/2026-03-14T12-00-00Z.json",
-      "workouts/browse/2026-03-15T12-00-00Z.json",
-    ]);
     bucket.listResponses.set("workouts/detail/", [
       "workouts/detail/2026-03-12T12-00-00Z.json",
       "workouts/detail/2026-03-13T12-00-00Z.json",
@@ -72,32 +63,47 @@ describe("publishSnapshotSet", () => {
       "workouts/locales/category/2026-03-14T12-00-00Z.json",
       "workouts/locales/category/2026-03-15T12-00-00Z.json",
     ]);
+    bucket.listResponses.set("workouts/locales/metadata/", [
+      "workouts/locales/metadata/2026-03-12T12-00-00Z.json",
+      "workouts/locales/metadata/2026-03-13T12-00-00Z.json",
+      "workouts/locales/metadata/2026-03-14T12-00-00Z.json",
+      "workouts/locales/metadata/2026-03-15T12-00-00Z.json",
+    ]);
+    bucket.listResponses.set("workouts/locales/wikipedia/", [
+      "workouts/locales/wikipedia/2026-03-12T12-00-00Z.json",
+      "workouts/locales/wikipedia/2026-03-13T12-00-00Z.json",
+      "workouts/locales/wikipedia/2026-03-14T12-00-00Z.json",
+      "workouts/locales/wikipedia/2026-03-15T12-00-00Z.json",
+    ]);
 
     await publishSnapshotSet(bucket, {
       baseKey: "workouts",
       manifest: {
         version: "2026-03-15T12-00-00Z",
         generatedAt: "2026-03-15T12-00-00Z",
-        browseKey: "workouts/browse/2026-03-15T12-00-00Z.json",
         detailKey: "workouts/detail/2026-03-15T12-00-00Z.json",
         titleLocaleKey: "workouts/locales/title/2026-03-15T12-00-00Z.json",
         categoryLocaleKey: "workouts/locales/category/2026-03-15T12-00-00Z.json",
+        metadataLocaleKey: "workouts/locales/metadata/2026-03-15T12-00-00Z.json",
+        wikipediaLocaleKey: "workouts/locales/wikipedia/2026-03-15T12-00-00Z.json",
         itemCount: 1,
       },
-      browse: [{ id: "1" }],
       detail: { "1": { id: "1" } },
     });
 
     expect(bucket.deletes).toEqual([
-      "workouts/browse/2026-03-12T12-00-00Z.json",
       "workouts/detail/2026-03-12T12-00-00Z.json",
       "workouts/locales/title/2026-03-12T12-00-00Z.json",
       "workouts/locales/category/2026-03-12T12-00-00Z.json",
+      "workouts/locales/metadata/2026-03-12T12-00-00Z.json",
+      "workouts/locales/wikipedia/2026-03-12T12-00-00Z.json",
     ]);
 
-    expect(JSON.parse(bucket.writes[2]?.value || "{}")).toMatchObject({
+    expect(JSON.parse(bucket.writes[1]?.value || "{}")).toMatchObject({
       titleLocaleKey: "workouts/locales/title/2026-03-15T12-00-00Z.json",
       categoryLocaleKey: "workouts/locales/category/2026-03-15T12-00-00Z.json",
+      metadataLocaleKey: "workouts/locales/metadata/2026-03-15T12-00-00Z.json",
+      wikipediaLocaleKey: "workouts/locales/wikipedia/2026-03-15T12-00-00Z.json",
     });
   });
 });

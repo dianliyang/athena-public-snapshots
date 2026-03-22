@@ -1,4 +1,6 @@
 import { buildPublicSnapshots, type PublicSnapshots } from "./pipeline/build-public-snapshots";
+import { publishWorkoutsFromRawPayload } from "./pipeline/publish-workouts-from-raw";
+import { RAW_WORKOUTS_LATEST_KEY, type RawWorkoutsPayload } from "./pipeline/retrieve-raw-workouts";
 import { publishSnapshotSet, type R2BucketLike } from "./publish/publish-to-r2";
 
 export type WorkerEnv = {
@@ -11,6 +13,17 @@ export type WorkerEnv = {
 type WorkerDeps = {
   buildPublicSnapshots?: () => Promise<PublicSnapshots>;
 };
+
+async function readRawWorkoutsPayload(
+  bucket: WorkerEnv["SNAPSHOTS_BUCKET"],
+): Promise<RawWorkoutsPayload> {
+  const object = await bucket.get?.(RAW_WORKOUTS_LATEST_KEY);
+  if (!object) {
+    throw new Error(`Missing raw workouts payload at ${RAW_WORKOUTS_LATEST_KEY}`);
+  }
+
+  return JSON.parse(await object.text()) as RawWorkoutsPayload;
+}
 
 export function createWorker(deps: WorkerDeps = {}) {
   return {
@@ -35,30 +48,22 @@ export function createWorker(deps: WorkerDeps = {}) {
       });
     },
     async scheduled(_controller: unknown, env: WorkerEnv, _ctx: unknown): Promise<void> {
-      const snapshots = deps.buildPublicSnapshots
-        ? await deps.buildPublicSnapshots()
-        : await buildPublicSnapshots({ includeCourses: false }, {
-            localeBucket: env.SNAPSHOTS_BUCKET,
-            translationApiKey: env.GOOGLE_TRANSLATE_API_KEY,
+      if (deps.buildPublicSnapshots) {
+        const snapshots = await deps.buildPublicSnapshots();
+        if (snapshots.workouts) {
+          await publishSnapshotSet(env.SNAPSHOTS_BUCKET, {
+            baseKey: "workouts",
+            manifest: snapshots.workouts.manifest,
+            detail: snapshots.workouts.detail,
           });
-
-      if (snapshots.courses) {
-        await publishSnapshotSet(env.SNAPSHOTS_BUCKET, {
-          baseKey: "courses",
-          manifest: snapshots.courses.manifest,
-          browse: snapshots.courses.browse,
-          detail: snapshots.courses.detail,
-        });
+        }
+        return;
       }
 
-      if (snapshots.workouts) {
-        await publishSnapshotSet(env.SNAPSHOTS_BUCKET, {
-          baseKey: "workouts",
-          manifest: snapshots.workouts.manifest,
-          browse: snapshots.workouts.browse,
-          detail: snapshots.workouts.detail,
-        });
-      }
+      const rawWorkouts = await readRawWorkoutsPayload(env.SNAPSHOTS_BUCKET);
+      await publishWorkoutsFromRawPayload(rawWorkouts, env.SNAPSHOTS_BUCKET, {
+        translationApiKey: env.GOOGLE_TRANSLATE_API_KEY,
+      });
     },
   };
 }

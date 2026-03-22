@@ -12,7 +12,13 @@ describe("athena-public-snapshots repository structure", () => {
     expect(existsSync(path.join(repoRoot, "package.json"))).toBe(true);
     expect(existsSync(path.join(repoRoot, "README.md"))).toBe(true);
     expect(existsSync(path.join(repoRoot, "wrangler.jsonc"))).toBe(true);
+    expect(existsSync(path.join(repoRoot, "scripts", "scrape-workouts-and-publish.sh"))).toBe(true);
     expect(existsSync(path.join(repoRoot, "src"))).toBe(true);
+  });
+
+  test("uses workout-specific scraper foundations instead of legacy course types", () => {
+    expect(existsSync(path.join(repoRoot, "src", "lib", "scrapers", "workout-types.ts"))).toBe(true);
+    expect(existsSync(path.join(repoRoot, "src", "lib", "scrapers", "types.ts"))).toBe(false);
   });
 
   test("uses unique wrangler binding names", () => {

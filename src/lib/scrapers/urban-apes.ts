@@ -1,7 +1,6 @@
 import * as cheerio from "cheerio";
 import { BaseScraper } from "./BaseScraper";
-import type { Course } from "./types";
-import type { WorkoutCourse } from "./cau-sport";
+import type { WorkoutCourse } from "./workout-types";
 
 type OpeningHourEntry = {
   label: string;
@@ -81,15 +80,6 @@ function mapDays(label: string): string {
 export class UrbanApes extends BaseScraper {
   constructor() {
     super("urban-apes");
-  }
-
-  links(): string[] {
-    return [QUICK_OVERVIEW_URL];
-  }
-
-  async parser(_html: string): Promise<Course[]> {
-    void _html;
-    return [];
   }
 
   parseWorkouts(html: string, pageUrl: string): WorkoutCourse[] {

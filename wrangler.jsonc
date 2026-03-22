@@ -26,17 +26,5 @@
 			"binding": "SNAPSHOTS_BUCKET",
 			"bucket_name": "athena-public-catalogs"
 		}
-	],
-	"vectorize": [
-		{
-			"binding": "COURSES_VECTORIZE",
-			"index_name": "athena-courses-index",
-			"remote": true
-		},
-		{
-			"binding": "WORKOUTS_VECTORIZE",
-			"index_name": "athena-workouts-index",
-			"remote": true
-		}
 	]
 }

@@ -1,7 +1,4 @@
-import { Course } from './types';
-import pLimit from 'p-limit';
-
-export abstract class BaseScraper {
+export class BaseScraper {
   name: string;
   semester?: string;
 
@@ -17,10 +14,6 @@ export abstract class BaseScraper {
   getSemesterParam(): string {
     return "";
   }
-
-  abstract links(): string[] | Promise<string[]>;
-
-  abstract parser(html: string, existingCodes?: Set<string>): Course[] | Promise<Course[]>;
 
   async fetchPage(url: string, retries = 3): Promise<string> {
     const headers = {
@@ -47,26 +40,5 @@ export abstract class BaseScraper {
     }
     console.error(`[${this.name}] All ${retries} attempts failed for ${url}`);
     return "";
-  }
-
-  async retrieve(): Promise<Course[]> {
-    const links = await this.links();
-    const dedupedLinks = Array.from(new Set(links));
-    console.log(`[${this.name}] Processing ${dedupedLinks.length} links${dedupedLinks.length !== links.length ? ` (deduped from ${links.length})` : ""}...`);
-
-    const limit = pLimit(5);
-    const results = await Promise.all(
-      dedupedLinks.map(link =>
-        limit(async () => {
-          const html = await this.fetchPage(link);
-          if (html) {
-            return this.parser(html);
-          }
-          return [];
-        })
-      )
-    );
-
-    return results.flat();
   }
 }

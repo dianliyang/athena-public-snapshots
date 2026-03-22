@@ -1,7 +1,9 @@
 import { CAUSport } from "./cau-sport";
+import { HAWKielSport } from "./haw-kiel-sport";
 import { RicksClub } from "./ricks-club";
 import { UrbanApes } from "./urban-apes";
-import type { CauCacheState, WorkoutCourse } from "./cau-sport";
+import type { CauCacheState } from "./cau-sport";
+import type { WorkoutCourse } from "./workout-types";
 
 export type WorkoutSourceBatch = {
   source: string;
@@ -14,26 +16,33 @@ export type WorkoutSourceRetrievalResult = {
   meta?: Record<string, unknown>;
 };
 
+const ACTIVE_WORKOUT_SOURCES: Array<"cau-sport" | "urban-apes" | "ricks-club" | "haw-kiel-sport"> = ["cau-sport", "urban-apes", "ricks-club", "haw-kiel-sport"];
+
 export async function retrieveWorkoutSourceBatches({
   semester,
   category,
   source,
   sources,
   cacheState,
+  cauDetailPageBudget,
 }: {
   semester?: string;
   category?: string;
-  source?: "cau-sport" | "urban-apes" | "ricks-club";
-  sources?: Array<"cau-sport" | "urban-apes" | "ricks-club">;
+  source?: "cau-sport" | "urban-apes" | "ricks-club" | "haw-kiel-sport";
+  sources?: Array<"cau-sport" | "urban-apes" | "ricks-club" | "haw-kiel-sport">;
   cacheState?: {
     cau?: CauCacheState;
   };
+  cauDetailPageBudget?: number;
 }): Promise<WorkoutSourceRetrievalResult> {
-  const selectedSources = sources?.length
+  const requestedSources = sources?.length
     ? Array.from(new Set(sources))
     : source
       ? [source]
-      : ["cau-sport"];
+      : ACTIVE_WORKOUT_SOURCES;
+  const selectedSources = requestedSources.filter(
+    (requested): requested is "cau-sport" | "urban-apes" | "ricks-club" | "haw-kiel-sport" => ACTIVE_WORKOUT_SOURCES.includes(requested as "cau-sport" | "urban-apes" | "ricks-club" | "haw-kiel-sport"),
+  );
 
   const batches: WorkoutSourceBatch[] = [];
   let meta: Record<string, unknown> | undefined;
@@ -44,6 +53,7 @@ export async function retrieveWorkoutSourceBatches({
     const result = await cauSport.retrieveWorkoutBatch({
       categoryName: category,
       cacheState: cacheState?.cau,
+      detailPageBudget: cauDetailPageBudget,
     });
     batches.push(
       ...result.batches.map((batch) => ({
@@ -72,6 +82,15 @@ export async function retrieveWorkoutSourceBatches({
       source: "Ricks Club",
       workouts: await ricksClub.retrieveWorkouts(category),
       pageUrl: "https://www.ricksclub.de/",
+    });
+  }
+
+  if (selectedSources.includes("haw-kiel-sport")) {
+    const hawKielSport = new HAWKielSport();
+    batches.push({
+      source: "HAW Kiel Hochschulsport",
+      workouts: await hawKielSport.retrieveWorkouts(category),
+      pageUrl: "https://haw-kiel.venuzle.com/search/events?v=table",
     });
   }
 
