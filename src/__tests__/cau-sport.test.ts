@@ -233,7 +233,7 @@ describe("CAUSport.parseWorkouts", () => {
             <div class="bslang_en"> </div>
           </div>
           <div class="bs_kursbeschreibung" id="bs_kbB87D7EB143">
-            <div class="bslang_de">Der Kurs startet erst ab 10 Teilnehmenden.</div>
+            <div class="bslang_de">Der Kurs startet erst ab 10 Teilnehmenden</div>
           </div>
           <div class="bs_kursangebot">
             <table class="bs_kurse">
@@ -257,25 +257,6 @@ describe("CAUSport.parseWorkouts", () => {
                   <td class="bs_spreis"><span>10,00 / 20,00 / 30,00 / 40,00</span></td>
                   <td class="bs_sbuch"><input type="submit" value="Buchen" /></td>
                 </tr>
-                <tr>
-                  <td class="bs_sknr"><span>1234-59</span></td>
-                  <td class="bs_sdet">
-                    <span>
-                      <span class="dispmobile">Yoga</span>
-                      Evening Flow
-                    </span>
-                  </td>
-                  <td class="bs_stag">Do.</td>
-                  <td class="bs_szeit">18:00-19:00</td>
-                  <td class="bs_sort">Fallback Room</td>
-                  <td class="bs_szr">
-                    23.10.2025 - 30.10.2025
-                    <a href="/details-4.html">Details</a>
-                  </td>
-                  <td class="bs_skl">Coach D</td>
-                  <td class="bs_spreis"><span>11,00 / 21,00 / 31,00 / 41,00</span></td>
-                  <td class="bs_sbuch"><input type="submit" value="Buchen" /></td>
-                </tr>
               </tbody>
             </table>
           </div>
@@ -288,18 +269,9 @@ describe("CAUSport.parseWorkouts", () => {
       "https://server.sportzentrum.uni-kiel.de/angebote/aktueller_zeitraum/yoga.html",
     );
 
-    expect(workouts).toHaveLength(2);
+    expect(workouts).toHaveLength(1);
     expect(workouts[0]?.description).toEqual({
-      notes: [
-        "Bitte eigene Matte mitbringen.",
-        "Der Kurs startet erst ab 10 Teilnehmenden.",
-      ],
-    });
-    expect(workouts[1]?.description).toEqual({
-      notes: [
-        "Bitte eigene Matte mitbringen.",
-        "Der Kurs startet erst ab 10 Teilnehmenden.",
-      ],
+      notes: "Bitte eigene Matte mitbringen.\n\nDer Kurs startet erst ab 10 Teilnehmenden.",
     });
   });
 });

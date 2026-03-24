@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import { BaseScraper } from "./BaseScraper";
 import type { WorkoutCourse } from "./workout-types";
+import { normalizeTextWithPunctuation, joinNotesWithPunctuation, joinNotesWithDoubleNewline } from "./utils/text";
 
 const HAW_KIEL_LIST_URL = "https://haw-kiel.venuzle.com/search/events?v=table";
 const PROVIDER = "HAW Kiel Hochschulsport";
@@ -33,13 +34,18 @@ type LivewireListingState = {
   cookieHeader: string;
 };
 
-function normalizeText(value: string): string {
-  return value
+function normalizeText(value: string, addPunctuation = false): string {
+  const normalized = value
     .replace(/\u00a0/g, " ")
     .replace(/[–—]/g, "-")
     .replace(/[’‘]/g, "'")
     .replace(/\s+/g, " ")
     .trim();
+
+  if (addPunctuation) {
+    return normalizeTextWithPunctuation(normalized);
+  }
+  return normalized;
 }
 
 function slugify(value: string): string {
@@ -156,7 +162,7 @@ function extractNormalizedTextWithLineBreaks(node: cheerio.Cheerio<any>): string
     .split("\n")
     .map((line) => normalizeText(line))
     .filter(Boolean)
-    .join("\n");
+    .join("\n\n");
 }
 
 function normalizeLocationParts(parts: string[]): string {
@@ -337,17 +343,17 @@ export class HAWKielSport extends BaseScraper {
 
     const descriptionSection = sectionByLabels("Beschreibung", "Description");
     const descriptionText = descriptionSection.length > 0
-      ? this.extractSectionText($, descriptionSection, "Beschreibung", "Description")
+      ? this.extractSectionText($, descriptionSection, true, "Beschreibung", "Description")
       : "";
 
     const priceSection = sectionByLabels("Preise", "Prices");
     const priceText = priceSection.length > 0
-      ? this.extractSectionText($, priceSection, "Preise", "Prices")
+      ? this.extractSectionText($, priceSection, true, "Preise", "Prices")
       : "";
 
     const instructorSection = sectionByLabels("Instructor", "Leitung");
     const instructor = instructorSection.length > 0
-      ? this.extractSectionText($, instructorSection, "Instructor", "Leitung")
+      ? this.extractSectionText($, instructorSection, false, "Instructor", "Leitung")
       : "";
 
     const categorySection = sectionByLabels("Kategorien", "Categories");
@@ -359,7 +365,7 @@ export class HAWKielSport extends BaseScraper {
     const { schedule, sessionCount } = this.parseAppointmentsTable(appointmentsSection);
     const locationSection = sectionByLabels("Ort", "Location");
     const explicitLocations = locationSection.length > 0
-      ? [this.extractSectionText($, locationSection, "Ort", "Location")]
+      ? [this.extractSectionText($, locationSection, false, "Ort", "Location")]
       : [];
     const locations = unique([
       ...explicitLocations,
@@ -531,6 +537,7 @@ export class HAWKielSport extends BaseScraper {
   private extractSectionText(
     $: cheerio.CheerioAPI,
     section: cheerio.Cheerio<any>,
+    addPunctuation: boolean,
     ...labels: string[]
   ): string {
     const container = section.find(".bg-base-100").first();
@@ -541,7 +548,10 @@ export class HAWKielSport extends BaseScraper {
     for (const label of labels) {
       text = text.replace(new RegExp(`^${label}\\s*`, "i"), "").trim();
     }
-    return text;
+    if (addPunctuation) {
+      return joinNotesWithDoubleNewline(text.split(/\n+/));
+    }
+    return normalizeText(text, false);
   }
 
   private defaultHeaders(): Record<string, string> {

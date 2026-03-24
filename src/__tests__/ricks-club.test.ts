@@ -125,7 +125,7 @@ describe("RicksClub.parseWorkouts", () => {
       "gegen Getränke frei",
     );
     expect(workouts.find((workout) => workout.title === "Bowling")?.description?.price).toBe(
-      "12,50€ - 15,00€ pro 30 Min. pro Bahn\nLeihschuhe: 2,50€ pro Person\nDie Mindestbuchungsdauer beträgt 1,5 Stunden\nFeiertags gesonderte Preise wie Wochenende",
+      "12,50€ - 15,00€ pro 30 Min. pro Bahn.\n\nLeihschuhe: 2,50€ pro Person.\n\nDie Mindestbuchungsdauer beträgt 1,5 Stunden.\n\nFeiertags gesonderte Preise wie Wochenende.",
     );
   });
 

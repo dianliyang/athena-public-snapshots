@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import { BaseScraper } from "./BaseScraper";
 import type { WorkoutCourse } from "./workout-types";
+import { joinNotesWithDoubleNewline, normalizeTextWithPunctuation } from "./utils/text";
 
 const RICKS_CLUB_URL = "https://www.ricksclub.de/";
 const PROVIDER = "Ricks Club";
@@ -414,9 +415,8 @@ export class RicksClub extends BaseScraper {
   }
 
   private joinPriceLines(...lines: Array<string | undefined | string[]>): string | undefined {
-    const normalized = lines.flatMap((line) => Array.isArray(line) ? line : line ? [line] : []);
-    const joined = normalized.filter(Boolean).join("\n");
-    return joined || undefined;
+    const normalized = lines.flatMap((line) => (Array.isArray(line) ? line : line ? [line] : []));
+    return joinNotesWithDoubleNewline(normalized) || undefined;
   }
 
   private buildScheduleFromOpeningHours(
@@ -485,7 +485,7 @@ export class RicksClub extends BaseScraper {
       category: title,
       title,
       description: {
-        general: description,
+        general: normalizeTextWithPunctuation(description),
         ...(priceText ? { price: priceText } : {}),
       },
       dayOfWeek: "",

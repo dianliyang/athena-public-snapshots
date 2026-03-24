@@ -269,6 +269,12 @@ async function appendMissingWikipediaEntries(
 }
 
 function normalizeLocalizedSourceText(value: unknown): string {
+  if (Array.isArray(value)) {
+    return value
+      .map((v) => String(v || "").trim())
+      .filter(Boolean)
+      .join("\n\n");
+  }
   return String(value || "").trim();
 }
 

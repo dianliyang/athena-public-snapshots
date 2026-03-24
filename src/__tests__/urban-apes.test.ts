@@ -40,10 +40,13 @@ describe("UrbanApes.parseWorkouts", () => {
               </tr>
             </tbody>
           </table>
-          <p>All prices are in euros and include VAT.</p>
-          <p><strong>*Children</strong>: Ages 4 to 13 (inclusive).</p>
-          <p><strong>*Discounted</strong>: Applies to individuals aged 14 to 17, pupils, apprentices, students, people with disabilities, recipients of citizen's allowance, unemployment benefits, and pensions, as well as voluntary service members.</p>
-          <p>Individual conditions for companies, clubs, and schools available upon request.<br>School climbing, events, and other activities can be arranged outside regular opening hours by appointment.</p>
+          <ul>
+            <li>All prices are in euros and include VAT.</li>
+            <li><strong>*Children</strong>: Ages 4 to 13 (inclusive).</li>
+            <li><strong>*Discounted</strong>: Applies to individuals aged 14 to 17, pupils, apprentices, students, people with disabilities, recipients of citizen's allowance, unemployment benefits, and pensions, as well as voluntary service members.</li>
+            <li>Individual conditions for companies, clubs, and schools available upon request.</li>
+            <li>School climbing, events, and other activities can be arranged outside regular opening hours by appointment.</li>
+          </ul>
         </div>
       </div>
       <div class="fusion-text">
@@ -71,8 +74,8 @@ describe("UrbanApes.parseWorkouts", () => {
       },
     ]);
     expect(workouts[0]?.description).toEqual({
-      general: "No previous experience necessary\nWe don't accept cash - card payment only!\nBouldering shoes are offered to rent. Please see price list for rental prices.\n[(⇒one-time user statement)](https://www.urbanapes.de/wp-content/uploads/2022/07/2022_Kiel_einmaligerBesuch_englisch.pdf)\nIf you come to us regularly, please sign up for a profile ([⇒here](https://boulderado.app/register/registration?hash=4SUnDJETksFpGWmz1AvrEGmwkIAcM5fI0oN49vdd)) to speed up\nthe entry process.",
-      price: "All prices are in euros and include VAT.\n*Children: Ages 4 to 13 (inclusive).\n*Discounted: Applies to individuals aged 14 to 17, pupils, apprentices, students, people with disabilities, recipients of citizen's allowance, unemployment benefits, and pensions, as well as voluntary service members.\nIndividual conditions for companies, clubs, and schools available upon request.\nSchool climbing, events, and other activities can be arranged outside regular opening hours by appointment.",
+      general: "No previous experience necessary.\n\nWe don't accept cash - card payment only!\n\nBouldering shoes are offered to rent. Please see price list for rental prices.\n\n[(⇒one-time user statement)](https://www.urbanapes.de/wp-content/uploads/2022/07/2022_Kiel_einmaligerBesuch_englisch.pdf).\n\nIf you come to us regularly, please sign up for a profile ([⇒here](https://boulderado.app/register/registration?hash=4SUnDJETksFpGWmz1AvrEGmwkIAcM5fI0oN49vdd)) to speed up.\n\nthe entry process.",
+      price: "All prices are in euros and include VAT.\n\n*Children: Ages 4 to 13 (inclusive).\n\n*Discounted: Applies to individuals aged 14 to 17, pupils, apprentices, students, people with disabilities, recipients of citizen's allowance, unemployment benefits, and pensions, as well as voluntary service members.\n\nIndividual conditions for companies, clubs, and schools available upon request.\n\nSchool climbing, events, and other activities can be arranged outside regular opening hours by appointment.",
     });
     expect(workouts[0]?.price).toEqual({
       adults: 15,

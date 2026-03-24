@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import { BaseScraper } from "./BaseScraper";
 import type { WorkoutCourse } from "./workout-types";
+import { joinNotesWithDoubleNewline, joinNotesWithPunctuation } from "./utils/text";
 
 type OpeningHourEntry = {
   label: string;
@@ -212,9 +213,10 @@ export class UrbanApes extends BaseScraper {
 
     if (panel.length === 0) return [];
 
-    return panel.find(".panel-body > p").toArray().map((paragraph) =>
-      normalizeText($(paragraph).text()),
-    ).filter(Boolean);
+    const notes = panel.find(".panel-body > p").toArray().map((paragraph) =>
+      $(paragraph).text(),
+    );
+    return joinNotesWithPunctuation(notes);
   }
 
   private parseDescription($: cheerio.CheerioAPI): { general?: string; price?: string } | null {
@@ -222,8 +224,8 @@ export class UrbanApes extends BaseScraper {
     const pricingItems = this.parsePricingDescriptionItems($);
     const description: { general?: string; price?: string } = {};
 
-    if (generalItems.length > 0) description.general = generalItems.join("\n");
-    if (pricingItems.length > 0) description.price = pricingItems.join("\n");
+    if (generalItems.length > 0) description.general = joinNotesWithDoubleNewline(generalItems);
+    if (pricingItems.length > 0) description.price = joinNotesWithDoubleNewline(pricingItems);
 
     return Object.keys(description).length > 0 ? description : null;
   }
@@ -235,14 +237,15 @@ export class UrbanApes extends BaseScraper {
 
     if (panel.length === 0) return [];
 
-    return panel.find(".panel-body p").toArray().flatMap((paragraph) => {
+    const notes = panel.find(".panel-body p").toArray().flatMap((paragraph) => {
       const html = $(paragraph).html() || "";
       return html
         .split(/<br\s*\/?>/i)
         .map((fragment) => this.htmlToTextWithLinks(fragment))
-        .map((line) => line.replace(/^[•\-\s]+/, "").trim())
-        .filter(Boolean);
+        .map((line) => line.replace(/^[•\-\s]+/, "").trim());
     });
+
+    return joinNotesWithPunctuation(notes);
   }
 
   private parsePricingDescriptionItems($: cheerio.CheerioAPI): string[] {
@@ -252,13 +255,11 @@ export class UrbanApes extends BaseScraper {
 
     if (panel.length === 0) return [];
 
-    return panel.find(".panel-body > p").toArray().flatMap((paragraph) => {
-      const html = $(paragraph).html() || "";
-      return html
-        .split(/<br\s*\/?>/i)
-        .map((fragment) => this.htmlToTextWithLinks(fragment))
-        .filter(Boolean);
-    });
+    const notes = panel.find(".panel-body ul li").toArray().map((li) =>
+      normalizeText($(li).text().replace(/^[•\-\s]+/, "").trim()),
+    );
+
+    return joinNotesWithPunctuation(notes);
   }
 
   private htmlToTextWithLinks(html: string): string {
@@ -274,8 +275,7 @@ export class UrbanApes extends BaseScraper {
     return normalizeText($("div").text());
   }
 
-  private parseLocation($: cheerio.CheerioAPI): string {
-    const match = normalizeText($.text()).match(/Grasweg 40.*24118 Kiel/i);
-    return match ? "Grasweg 40, 24118 Kiel" : "";
+  private parseLocation(_$: cheerio.CheerioAPI): string {
+    return "Grasweg 40, 24118 Kiel";
   }
 }

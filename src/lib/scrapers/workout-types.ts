@@ -6,7 +6,7 @@ export interface WorkoutCourse {
   description?: {
     general?: string;
     price?: string;
-    notes?: string[];
+    notes?: string;
   } | null;
   dayOfWeek: string;
   startTime: string;

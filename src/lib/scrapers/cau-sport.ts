@@ -3,6 +3,7 @@ import type { AnyNode } from "domhandler";
 import { BaseScraper } from "./BaseScraper";
 import type { WorkoutCourse } from "./workout-types";
 import { buildCurrentWorkoutSemester } from "./utils/semester";
+import { joinNotesWithDoubleNewline, joinNotesWithPunctuation, normalizeTextWithPunctuation } from "./utils/text";
 
 const BOOKING_STATUS_MAP: Record<string, string> = {
   bs_btn_abgelaufen: "expired",
@@ -178,10 +179,11 @@ function getMaxAgeMs(cacheControl: string | null): number {
 function parseCategoryPageNotes(html: string): string[] {
   const $ = cheerio.load(html);
 
-  return $("#bs_content .bs_angblock .bs_kursbeschreibung .bslang_de")
-    .map((_, node) => $(node).text().replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim())
-    .get()
-    .filter(Boolean);
+  const notes = $("#bs_content .bs_angblock .bs_kursbeschreibung .bslang_de")
+    .map((_, node) => $(node).text())
+    .get();
+
+  return joinNotesWithPunctuation(notes);
 }
 
 export class CAUSport extends BaseScraper {
@@ -635,13 +637,13 @@ export class CAUSport extends BaseScraper {
     $(".bs_kursbeschreibung").each((_, element) => {
       const germanText = $(element)
         .find(".bslang_de")
-        .map((__, node) => $(node).text().replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim())
+        .map((__, node) => $(node).text())
         .get()
-        .filter(Boolean)
         .join(" ")
         .trim();
 
-      if (germanText) notes.push(germanText);
+      const normalized = normalizeTextWithPunctuation(germanText);
+      if (normalized) notes.push(normalized);
     });
 
     return { dates: Array.from(datesSet), locations: Array.from(locationsSet), notes };
@@ -828,7 +830,7 @@ export class CAUSport extends BaseScraper {
           ...(categoryPageNotes.length > 0
             ? {
                 description: {
-                  notes: categoryPageNotes,
+                  notes: joinNotesWithDoubleNewline(categoryPageNotes),
                 },
               }
             : {}),

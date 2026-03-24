@@ -190,8 +190,8 @@ describe("HAWKielSport", () => {
       { day: "Monday", time: "18:00-19:30", location: "Hall A, Grenzstrasse 3, Kiel" },
     ]);
     expect(workouts[0]?.description).toEqual({
-      general: "Technique-focused training block.\nBring indoor shoes.",
-      price: "Student 15,00 €\nExternal 35,00 €",
+      general: "Technique-focused training block.\n\nBring indoor shoes.",
+      price: "Student 15,00 €.\n\nExternal 35,00 €.",
     });
     expect(workouts[0]?.details).toEqual(expect.objectContaining({
       rawPrice: "Student 15,00 € / External 35,00 €",
