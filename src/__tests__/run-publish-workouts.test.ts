@@ -111,7 +111,7 @@ describe("runPublishWorkouts", () => {
     buildPublicSnapshots.mockImplementation(async (_options, deps) => {
       await deps.localeBucket.put(
         "workouts/locales/metadata/2026-03-22T16-00-00Z.json",
-        JSON.stringify({ page: {}, entries: { demo: { description: { notes: { digest: "d41d8cd98f00b204e9800998ecf8427e", de: "", en: "", ja: "", ko: "", "zh-CN": "" } } } } }),
+        JSON.stringify({ pages: {}, entries: { demo: { notes: { digest: "d41d8cd98f00b204e9800998ecf8427e", de: "", en: "", ja: "", ko: "", "zh-CN": "" } } } }),
       );
 
       return {
@@ -149,6 +149,6 @@ describe("runPublishWorkouts", () => {
     const localeBucketArg = writeLocalWorkoutLocales.mock.calls.at(-1)?.[1];
     const metadataObject = await localeBucketArg.get("workouts/locales/metadata/2026-03-22T16-00-00Z.json");
 
-    expect(await metadataObject?.text()).toBe(JSON.stringify({ page: {}, entries: { demo: { description: { notes: { digest: "d41d8cd98f00b204e9800998ecf8427e", de: "", en: "", ja: "", ko: "", "zh-CN": "" } } } } }));
+    expect(await metadataObject?.text()).toBe(JSON.stringify({ pages: {}, entries: { demo: { notes: { digest: "d41d8cd98f00b204e9800998ecf8427e", de: "", en: "", ja: "", ko: "", "zh-CN": "" } } } }));
   });
 });

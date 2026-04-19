@@ -1,0 +1,15 @@
+services:
+  r2-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: npm run dashboard
+    ports:
+      - "${DASHBOARD_PORT:-3000}:3000"
+    env_file:
+      - .env
+    environment:
+      DASHBOARD_PORT: 3000
+    volumes:
+      - .:/app
+      - /app/node_modules

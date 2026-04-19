@@ -64,7 +64,7 @@ describe("createLocalSnapshotBucket", () => {
       "zh-CN": "Bowling Games-zh-CN",
     });
     expect(JSON.parse(fs.readFileSync(metadataLocalePath, "utf8"))).toEqual({
-      page: {},
+      pages: {},
       entries: {
         "ricks-club-bowling": {
           general: {
@@ -81,7 +81,7 @@ describe("createLocalSnapshotBucket", () => {
     expect(JSON.parse(fs.readFileSync(wikipediaLocalePath, "utf8"))).toEqual({
       "Bowling Games": {
         en: "",
-        de: "Bowling Games",
+        de: "Bowling",
         ja: "",
         ko: "",
         "zh-CN": "",
@@ -205,7 +205,7 @@ describe("createLocalSnapshotBucket", () => {
       metadataLocalePath,
       JSON.stringify(
         {
-          page: {},
+          pages: {},
           entries: {
             "ricks-club-bowling": {
               general: {
@@ -237,13 +237,12 @@ describe("createLocalSnapshotBucket", () => {
       version,
       {
         localeBucket: bucket,
-        ignoreExisting: true,
       },
     );
 
     expect(metadataLocaleKey).toBe(`workouts/locales/metadata/${version}.json`);
     expect(JSON.parse(fs.readFileSync(metadataLocalePath, "utf8"))).toEqual({
-      page: {},
+      pages: {},
       entries: {
         "ricks-club-bowling": {
           general: {

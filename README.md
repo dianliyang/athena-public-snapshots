@@ -2,6 +2,54 @@
 
 Builds and publishes public workout detail JSON snapshots and locale artifacts to Cloudflare R2.
 
+## Local R2 Dashboard
+
+This repo also includes a local-only dashboard for managing existing files in R2.
+
+Set these environment variables:
+
+```bash
+R2_ACCOUNT_ID=...
+R2_ACCESS_KEY_ID=...
+R2_SECRET_ACCESS_KEY=...
+R2_BUCKET_NAME=athena-public-catalogs
+```
+
+Optional:
+
+```bash
+DASHBOARD_PORT=3000
+DASHBOARD_PREFIX=workouts/
+R2_REGION=auto
+R2_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+```
+
+Run locally:
+
+```bash
+npm run dashboard
+```
+
+Run with Docker:
+
+```bash
+docker build -t athena-r2-dashboard .
+docker run --rm -p 3000:3000 \
+  -e R2_ACCOUNT_ID \
+  -e R2_ACCESS_KEY_ID \
+  -e R2_SECRET_ACCESS_KEY \
+  -e R2_BUCKET_NAME \
+  -e DASHBOARD_PREFIX=workouts/ \
+  athena-r2-dashboard
+```
+
+The dashboard lets you:
+
+- browse existing keys by prefix
+- open text and JSON files in a browser editor
+- replace any existing object with an uploaded file
+- delete existing objects
+
 ## Architecture
 
 This repo uses two user-facing publish modes:

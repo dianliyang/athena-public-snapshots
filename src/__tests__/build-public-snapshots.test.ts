@@ -299,6 +299,38 @@ describe("buildPublicSnapshots", () => {
     });
   });
 
+  test("skips wikipedia locale entries when category is missing instead of falling back to id", async () => {
+    const writes = new Map<string, string>();
+    const version = "2026-03-22T12-15-00Z";
+    const wikipediaKey = `workouts/locales/wikipedia/${version}.json`;
+
+    const bucket = {
+      async get() {
+        return null;
+      },
+      async put(key: string, value: string) {
+        writes.set(key, value);
+      },
+    };
+
+    await buildPublicSnapshots(
+      { version },
+      {
+        retrieveWorkouts: async () => [
+          {
+            id: "ricks-club-bowling",
+            title: "Bowling",
+            provider: "Ricks Club",
+            category: "   ",
+          },
+        ],
+        localeBucket: bucket,
+      },
+    );
+
+    expect(JSON.parse(writes.get(wikipediaKey) || "{}")).toEqual({});
+  });
+
   test("reuses current locale entries and only translates missing ones when enabled", async () => {
     const writes = new Map<string, string>();
     const version = "2026-03-22T12-30-00Z";
@@ -319,23 +351,22 @@ describe("buildPublicSnapshots", () => {
             },
           }),
           [metadataKey]: JSON.stringify({
-            page: {},
+            pages: {},
             entries: {
               "ricks-club-bowling": {
-                description: {
-                  general: {
-                    digest: "29d463f788ca1238d915a6c244d473d2",
-                    en: "Family-friendly bowling lanes-en-existing",
-                    de: "Family-friendly bowling lanes",
-                    ja: "Family-friendly bowling lanes-ja-existing",
-                    ko: "Family-friendly bowling lanes-ko-existing",
-                    "zh-CN": "Family-friendly bowling lanes-zh-CN-existing",
-                  },
+                general: {
+                  digest: "29d463f788ca1238d915a6c244d473d2",
+                  de: "Family-friendly bowling lanes",
+                  en: "Family-friendly bowling lanes-en",
+                  ja: "Family-friendly bowling lanes-ja",
+                  ko: "Family-friendly bowling lanes-ko",
+                  "zh-CN": "Family-friendly bowling lanes-zh-CN",
                 },
               },
             },
           }),
-        };
+          };
+
 
         const value = objects[key];
         return value ? { text: async () => value } : null;
@@ -380,18 +411,16 @@ describe("buildPublicSnapshots", () => {
       async get(key: string) {
         const objects: Record<string, string> = {
           [metadataKey]: JSON.stringify({
-            page: {},
+            pages: {},
             entries: {
               "existing-workout": {
-                description: {
-                  general: {
-                    digest: "d062e0e8e2ec43175c539d2a947e7e7e",
-                    en: "Student price: EUR 135.00",
-                    de: "Preis für Studierende: 135,00 EUR",
-                    ja: "学生料金: 135.00ユーロ",
-                    ko: "학생 가격: 135.00유로",
-                    "zh-CN": "学生价格：135.00欧元",
-                  },
+                general: {
+                  digest: "d062e0e8e2ec43175c539d2a947e7e7e",
+                  en: "Student price: EUR 135.00",
+                  de: "Preis für Studierende: 135,00 EUR",
+                  ja: "学生料金: 135.00ユーロ",
+                  ko: "학생 가격: 135.00유로",
+                  "zh-CN": "学生价格：135.00欧元",
                 },
               },
             },
@@ -428,8 +457,18 @@ describe("buildPublicSnapshots", () => {
     expect(translateText).toHaveBeenCalledTimes(12);
     expect(translateText).toHaveBeenCalledWith("preis fur studierende 13500 eur", "en");
     expect(JSON.parse(writes.get(metadataKey) || "{}")).toEqual({
-      page: {},
+      pages: {},
       entries: {
+        "existing-workout": {
+          general: {
+            digest: "d062e0e8e2ec43175c539d2a947e7e7e",
+            en: "Student price: EUR 135.00",
+            de: "Preis für Studierende: 135,00 EUR",
+            ja: "学生料金: 135.00ユーロ",
+            ko: "학생 가격: 135.00유로",
+            "zh-CN": "学生价格：135.00欧元",
+          },
+        },
         "haw-kiel-123": {
           general: {
             digest: "c22d061e4e60d0577eb4d5f849fe4ef1",
@@ -480,7 +519,7 @@ describe("buildPublicSnapshots", () => {
 
     expect(translateText).toHaveBeenCalledWith("Preis für Studierende: 135,00 EUR", "en");
     expect(JSON.parse(writes.get(metadataKey) || "{}")).toEqual({
-      page: {},
+      pages: {},
       entries: {
         "haw-kiel-456": {
           general: {
@@ -529,7 +568,7 @@ describe("buildPublicSnapshots", () => {
 
     expect(snapshots.workouts?.detail["haw-kiel-789"]).not.toHaveProperty("description");
     expect(JSON.parse(writes.get(metadataKey) || "{}")).toEqual({
-      page: {},
+      pages: {},
       entries: {
         "haw-kiel-789": {
           general: {
@@ -559,7 +598,7 @@ describe("buildPublicSnapshots", () => {
     const metadataKey = `workouts/locales/metadata/${version}.json`;
     const translateText = vi.fn(async (text: string, target: string) => `${text}-${target}`);
     const cauPageUrl = "https://server.sportzentrum.uni-kiel.de/angebote/aktueller_zeitraum/_Yoga__Aerial_Yoga.html";
-    const cauMetadataKey = "cau_yoga_aerial_yoga";
+    const cauMetadataKey = "yoga__aerial_yoga";
 
     const snapshots = await buildPublicSnapshots(
       { version },
@@ -606,18 +645,18 @@ describe("buildPublicSnapshots", () => {
 
     expect(snapshots.workouts?.detail["cau-1234-58"]).not.toHaveProperty("description");
     expect(snapshots.workouts?.detail["cau-1234-59"]).not.toHaveProperty("description");
-    expect(translateText).not.toHaveBeenCalledWith("Bitte eigene Matte mitbringen.", "en");
+    const expectedNotes = "Bitte eigene Matte mitbringen.\n\nDer Kurs startet erst ab 10 Teilnehmenden.";
     expect(JSON.parse(writes.get(metadataKey) || "{}")).toEqual({
-      page: {
+      pages: {
         [cauMetadataKey]: {
           "CAU Kiel Sportzentrum": {
             notes: {
               digest: "839f3b1a9a184653dbedd17ee2b83108",
-              de: "Bitte eigene Matte mitbringen.\n\nDer Kurs startet erst ab 10 Teilnehmenden.",
-              en: "",
-              ja: "",
-              ko: "",
-              "zh-CN": "",
+              de: expectedNotes,
+              en: `${expectedNotes}-en`,
+              ja: `${expectedNotes}-ja`,
+              ko: `${expectedNotes}-ko`,
+              "zh-CN": `${expectedNotes}-zh-CN`,
             },
           },
         },

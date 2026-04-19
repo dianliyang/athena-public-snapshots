@@ -1,3 +1,4 @@
+import * as crypto from "node:crypto";
 import { retrieveRawWorkouts } from "./retrieve-raw-workouts";
 import { buildCurrentWorkoutSemester } from "../lib/scrapers/utils/semester";
 import { buildWorkoutsSnapshot } from "../build/build-workouts-snapshot";
@@ -8,16 +9,27 @@ type WorkoutSnapshotSet = ReturnType<typeof buildWorkoutsSnapshot>;
 type LocaleEntry = Record<string, string>;
 type LocaleMap = Record<string, LocaleEntry>;
 type DescriptionLocaleEntry = {
-  original: string;
+  digest: string;
 } & LocaleEntry;
-type WorkoutMetadataLocaleEntry = {
-  description?: Record<string, DescriptionLocaleEntry>;
+type WorkoutMetadataLocaleEntry = Record<string, DescriptionLocaleEntry>;
+type WorkoutMetadataLocaleMap = {
+  pages?: Record<string, DescriptionLocaleEntry>;
+  entries?: Record<string, WorkoutMetadataLocaleEntry>;
 };
-type WorkoutMetadataLocaleMap = Record<string, WorkoutMetadataLocaleEntry>;
+
+function extractCauPageIdFromUrl(url: string | null): string | null {
+  if (!url) return null;
+  const parts = url.split("/");
+  const filename = parts[parts.length - 1];
+  if (filename && filename.startsWith("_") && filename.endsWith(".html")) {
+    return filename.slice(1, -5).toLowerCase();
+  }
+  return null;
+}
 type LocaleBucketLike = R2BucketLike & {
   get?(key: string): Promise<{ text(): Promise<string> } | null>;
 };
-type TranslateTargetLocale = "en" | "ja" | "ko" | "zh-CN";
+type TranslateTargetLocale = "de" | "en" | "ja" | "ko" | "zh-CN";
 type TranslateText = (
   text: string,
   target: TranslateTargetLocale,
@@ -82,7 +94,9 @@ function normalizeWorkoutForSnapshot(workout: any) {
     ...workout,
     id:
       workout.id ??
-      `${workout.source.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${workout.courseCode}`,
+      `${workout.source}-${workout.title}-${workout.courseCode}`
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-"),
     title: workout.title,
     provider: workout.provider ?? workout.source,
     weekday: workout.weekday ?? workout.dayOfWeek,
@@ -198,9 +212,22 @@ async function readWorkoutMetadataLocaleMap(
 
   const text = await object.text();
   const parsed = JSON.parse(text);
-  return parsed && typeof parsed === "object"
-    ? (parsed as WorkoutMetadataLocaleMap)
-    : {};
+  if (!parsed || typeof parsed !== "object") return {};
+
+  if ("pages" in parsed || "entries" in parsed) {
+    return parsed as WorkoutMetadataLocaleMap;
+  }
+
+  // Legacy flat map: convert to 'entries' and flatten 'description' wrapper if present
+  const entries: Record<string, WorkoutMetadataLocaleEntry> = {};
+  for (const [id, value] of Object.entries(parsed)) {
+    const entry = value as any;
+    if (entry && typeof entry === "object") {
+      entries[id] = entry.description || entry;
+    }
+  }
+
+  return { pages: {}, entries };
 }
 
 async function readSeededLocaleMap(
@@ -257,11 +284,11 @@ async function appendMissingWikipediaEntries(
   let changed = false;
 
   for (const workout of workouts) {
-    const workoutId = String(workout.id || "").trim();
-    if (!workoutId || nextMap[workoutId]) continue;
+    const category = String(workout.category || "").trim();
+    if (!category || nextMap[category]) continue;
 
     const seedTitle = String(workout.title || "").trim();
-    nextMap[workoutId] = buildLocaleTemplate(seedTitle, map);
+    nextMap[category] = buildLocaleTemplate(seedTitle, map);
     changed = true;
   }
 
@@ -283,7 +310,9 @@ async function buildDescriptionLocaleEntry(
   existingEntry: DescriptionLocaleEntry | undefined,
   translateText?: TranslateText,
 ): Promise<{ entry: DescriptionLocaleEntry; changed: boolean }> {
-  if (existingEntry?.original === source) {
+  const digest = crypto.createHash("md5").update(source).digest("hex");
+
+  if (existingEntry?.digest === digest) {
     return {
       entry: existingEntry,
       changed: false,
@@ -299,9 +328,9 @@ async function buildDescriptionLocaleEntry(
 
   return {
     entry: {
-      original: source,
+      digest,
       ...translated,
-    },
+    } as any,
     changed: true,
   };
 }
@@ -320,7 +349,10 @@ async function syncWorkoutMetadataLocaleMap(
     metadataKey,
     seedKey,
   );
-  const nextMap: WorkoutMetadataLocaleMap = {};
+  const nextMap: WorkoutMetadataLocaleMap = {
+    pages: { ...(existingMap.pages || {}) },
+    entries: { ...(existingMap.entries || {}) },
+  };
   let changed = false;
 
   for (const workout of workouts) {
@@ -330,31 +362,70 @@ async function syncWorkoutMetadataLocaleMap(
     const description = workout.description;
     if (!description || typeof description !== "object") continue;
 
-    const nextDescriptionEntries: Record<string, DescriptionLocaleEntry> = {};
-    const existingDescriptionEntries =
-      existingMap[workoutId]?.description || {};
+    const isCau = workout.provider === "CAU Kiel Sportzentrum";
+    const cauPageId = isCau ? extractCauPageIdFromUrl(workout.url) : null;
 
-    for (const [field, rawValue] of Object.entries(description)) {
-      const source = normalizeLocalizedSourceText(rawValue);
-      if (!source) continue;
+    if (isCau && cauPageId) {
+      // CAU uses page-level descriptions in 'pages'
+      const rawValue = description.notes;
+      if (rawValue) {
+        const source = normalizeLocalizedSourceText(rawValue);
+        if (source) {
+          const providerMap = (nextMap.pages?.[cauPageId] || {}) as any;
+          const existingEntry = providerMap[workout.provider]?.notes;
+          const { entry, changed: entryChanged } =
+            await buildDescriptionLocaleEntry(
+              source,
+              existingEntry,
+              translateText,
+            );
+          if (entryChanged) {
+            nextMap.pages = nextMap.pages || {};
+            nextMap.pages[cauPageId] = {
+              ...providerMap,
+              [workout.provider]: {
+                ...providerMap[workout.provider],
+                notes: entry,
+              },
+            } as any;
+            changed = true;
+          }
+        }
+      }
+      // Ensure we don't have a redundant entry for this workout
+      if (nextMap.entries?.[workoutId]) {
+        delete nextMap.entries[workoutId];
+        changed = true;
+      }
+    } else {
+      // Other providers or non-page CAU use workout-specific 'entries'
+      const nextDescriptionEntries: Record<string, DescriptionLocaleEntry> = {};
+      const existingDescriptionEntries = (nextMap.entries?.[workoutId] || {}) as any;
 
-      const existingEntry = existingDescriptionEntries[field];
-      const { entry, changed: entryChanged } =
-        await buildDescriptionLocaleEntry(source, existingEntry, translateText);
-      nextDescriptionEntries[field] = entry;
-      changed = changed || entryChanged;
-    }
+      for (const [field, rawValue] of Object.entries(description)) {
+        const source = normalizeLocalizedSourceText(rawValue);
+        if (!source) continue;
 
-    if (Object.keys(nextDescriptionEntries).length === 0) continue;
+        const existingEntry = existingDescriptionEntries[field];
+        const { entry, changed: entryChanged } =
+          await buildDescriptionLocaleEntry(
+            source,
+            existingEntry,
+            translateText,
+          );
+        nextDescriptionEntries[field] = entry;
+        changed = changed || entryChanged;
+      }
 
-    nextMap[workoutId] = { description: nextDescriptionEntries };
+      if (Object.keys(nextDescriptionEntries).length === 0) continue;
 
-    const existingWorkoutEntry = existingMap[workoutId];
-    if (
-      JSON.stringify(existingWorkoutEntry || {}) !==
-      JSON.stringify(nextMap[workoutId])
-    ) {
-      changed = true;
+      const existingWorkoutEntry = nextMap.entries?.[workoutId];
+
+      if (JSON.stringify(existingWorkoutEntry || {}) !== JSON.stringify(nextDescriptionEntries)) {
+        nextMap.entries = nextMap.entries || {};
+        nextMap.entries[workoutId] = nextDescriptionEntries;
+        changed = true;
+      }
     }
   }
 
